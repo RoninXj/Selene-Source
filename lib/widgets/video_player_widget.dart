@@ -168,6 +168,12 @@ class _VideoPlayerWidgetState extends State<VideoPlayerWidget> with WidgetsBindi
     try {
       // 检查设备是否支持 PiP
       _isPipSupported = await _pip.isSupported();
+
+      if (Platform.isIOS) {
+        _isPipSupported = false;
+      }
+
+      debugPrint('PiP supported: $_isPipSupported');
       
       if (_isPipSupported) {
         // 注册 PiP 状态变化监听器
