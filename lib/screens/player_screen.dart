@@ -1345,6 +1345,7 @@ class _PlayerScreenState extends State<PlayerScreen> with TickerProviderStateMix
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
+      barrierColor: Colors.transparent,
       enableDrag: false,
       builder: (context) {
         return StatefulBuilder(
@@ -1404,6 +1405,7 @@ class _PlayerScreenState extends State<PlayerScreen> with TickerProviderStateMix
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
+      barrierColor: Colors.transparent,
       enableDrag: false,
       builder: (context) {
         return StatefulBuilder(
@@ -1667,6 +1669,7 @@ class _PlayerScreenState extends State<PlayerScreen> with TickerProviderStateMix
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
+      barrierColor: Colors.transparent,
       enableDrag: false,
       builder: (context) {
         return StatefulBuilder(

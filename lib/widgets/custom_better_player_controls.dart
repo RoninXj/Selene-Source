@@ -100,6 +100,8 @@ class _CustomBetterPlayerControlsState
       });
       _hideTimer?.cancel();
       widget.onControlsVisibilityChanged(false);
+      // PiP 开始时立刻播放视频
+      widget.controller.play();
     } else if (event.betterPlayerEventType == BetterPlayerEventType.pipStop) {
       // 退出 PiP 模式时立即设置为竖屏
       SystemChrome.setPreferredOrientations([
