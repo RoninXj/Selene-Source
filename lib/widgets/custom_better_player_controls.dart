@@ -48,7 +48,6 @@ class _CustomBetterPlayerControlsState
   bool _isSeekingViaSwipe = false;
   double _swipeStartX = 0;
   Duration _swipeStartPosition = Duration.zero;
-  bool _isPipSupported = false;
   bool _isInPipMode = false;
 
   @override
@@ -56,21 +55,11 @@ class _CustomBetterPlayerControlsState
     super.initState();
     widget.controller.addEventsListener(_onVideoStateChanged);
     widget.controller.videoPlayerController?.addListener(_onVideoPlayerUpdate);
-    _checkPipSupport();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         _forceStartHideTimer();
       }
     });
-  }
-
-  Future<void> _checkPipSupport() async {
-    final isSupported = await widget.controller.isPictureInPictureSupported();
-    if (mounted) {
-      setState(() {
-        _isPipSupported = isSupported;
-      });
-    }
   }
 
   void _onVideoPlayerUpdate() {
@@ -605,7 +594,7 @@ class _CustomBetterPlayerControlsState
                         await _showSpeedDialog();
                       },
                     ),
-                    if (_isPipSupported && !isFullscreen)
+                    if (!isFullscreen)
                       GestureDetector(
                         onTap: () {
                           _onUserInteraction();
@@ -617,7 +606,7 @@ class _CustomBetterPlayerControlsState
                         behavior: HitTestBehavior.opaque,
                         child: Container(
                           padding: const EdgeInsets.all(8),
-                          child: Icon(
+                          child: const Icon(
                             Icons.picture_in_picture_alt,
                             color: Colors.white,
                             size: 22,
