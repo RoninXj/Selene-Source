@@ -6,6 +6,7 @@ import '../widgets/video_card.dart';
 import '../models/play_record.dart';
 import '../models/video_info.dart';
 import '../services/page_cache_service.dart';
+import '../utils/device_utils.dart';
 import 'video_menu_bottom_sheet.dart';
 import 'shimmer_effect.dart';
 
@@ -40,17 +41,17 @@ class _FavoritesGridState extends State<FavoritesGrid>
   bool _isLoading = true;
   String? _errorMessage;
   final PageCacheService _cacheService = PageCacheService();
-  
+
   // 静态变量存储当前实例
   static _FavoritesGridState? _currentInstance;
 
   @override
   void initState() {
     super.initState();
-    
+
     // 设置当前实例
     _currentInstance = this;
-    
+
     _loadData();
   }
 
@@ -91,13 +92,13 @@ class _FavoritesGridState extends State<FavoritesGrid>
     try {
       // 分别刷新收藏夹和播放记录数据
       final futures = <Future>[];
-      
+
       // 刷新收藏夹数据
       futures.add(_refreshFavorites());
-      
+
       // 刷新播放记录数据
       futures.add(_refreshPlayRecords());
-      
+
       await Future.wait(futures);
     } catch (e) {
       // 后台刷新失败，静默处理，保持原有数据
@@ -109,13 +110,13 @@ class _FavoritesGridState extends State<FavoritesGrid>
     try {
       // 刷新缓存数据
       await _cacheService.refreshFavorites(context);
-      
+
       // 重新获取收藏夹数据
       final result = await _cacheService.getFavorites(context);
-      
+
       if (result.success && result.data != null && mounted) {
         // 只有当新数据与当前数据不同时才更新UI
-        if (_favorites.length != result.data!.length || 
+        if (_favorites.length != result.data!.length ||
             !_isSameFavorites(_favorites, result.data!)) {
           setState(() {
             _favorites = result.data!;
@@ -132,13 +133,14 @@ class _FavoritesGridState extends State<FavoritesGrid>
   Future<void> _refreshPlayRecords() async {
     try {
       await _cacheService.refreshPlayRecords(context);
-      
+
       // 刷新成功后，从缓存获取最新数据
       if (mounted) {
-        final cachedRecords = _cacheService.getCache<List<PlayRecord>>('play_records');
+        final cachedRecords =
+            _cacheService.getCache<List<PlayRecord>>('play_records');
         if (cachedRecords != null) {
           // 只有当新数据与当前数据不同时才更新UI
-          if (_playRecords.length != cachedRecords.length || 
+          if (_playRecords.length != cachedRecords.length ||
               !_isSamePlayRecords(_playRecords, cachedRecords)) {
             setState(() {
               _playRecords = cachedRecords;
@@ -154,9 +156,9 @@ class _FavoritesGridState extends State<FavoritesGrid>
   /// 比较两个收藏夹列表是否相同
   bool _isSameFavorites(List<FavoriteItem> list1, List<FavoriteItem> list2) {
     if (list1.length != list2.length) return false;
-    
+
     for (int i = 0; i < list1.length; i++) {
-      if (list1[i].id != list2[i].id || 
+      if (list1[i].id != list2[i].id ||
           list1[i].source != list2[i].source ||
           list1[i].saveTime != list2[i].saveTime) {
         return false;
@@ -168,9 +170,9 @@ class _FavoritesGridState extends State<FavoritesGrid>
   /// 比较两个播放记录列表是否相同
   bool _isSamePlayRecords(List<PlayRecord> list1, List<PlayRecord> list2) {
     if (list1.length != list2.length) return false;
-    
+
     for (int i = 0; i < list1.length; i++) {
-      if (list1[i].id != list2[i].id || 
+      if (list1[i].id != list2[i].id ||
           list1[i].source != list2[i].source ||
           list1[i].saveTime != list2[i].saveTime) {
         return false;
@@ -182,11 +184,10 @@ class _FavoritesGridState extends State<FavoritesGrid>
   /// 从UI中移除指定的收藏项目（供外部调用）
   void removeFavoriteFromUI(String source, String id) {
     if (!mounted) return;
-    
+
     setState(() {
-      _favorites.removeWhere((favorite) => 
-        favorite.source == source && favorite.id == id
-      );
+      _favorites.removeWhere(
+          (favorite) => favorite.source == source && favorite.id == id);
     });
   }
 
@@ -194,7 +195,7 @@ class _FavoritesGridState extends State<FavoritesGrid>
     try {
       // 使用缓存服务获取数据
       final result = await _cacheService.getFavorites(context);
-      
+
       if (result.success && result.data != null) {
         setState(() {
           _favorites = result.data!;
@@ -228,7 +229,8 @@ class _FavoritesGridState extends State<FavoritesGrid>
     // 查找匹配的播放记录
     try {
       final matchingPlayRecord = _playRecords.firstWhere(
-        (record) => record.source == favorite.source && record.id == favorite.id,
+        (record) =>
+            record.source == favorite.source && record.id == favorite.id,
       );
       // 如果有匹配的播放记录，使用播放记录的数据
       return matchingPlayRecord;
@@ -274,28 +276,34 @@ class _FavoritesGridState extends State<FavoritesGrid>
       color: const Color(0xFF27ae60),
       child: LayoutBuilder(
         builder: (context, constraints) {
-          // 计算每列的宽度，确保严格三列布局
+          final isTablet = DeviceUtils.isTablet(context);
+          // 平板模式6列，手机模式3列
+          final int crossAxisCount = isTablet ? 6 : 3;
+
+          // 计算每列的宽度
           final double screenWidth = constraints.maxWidth;
-          final double padding = 16.0; // 左右padding
-          final double spacing = 12.0; // 列间距
-          final double availableWidth = screenWidth - (padding * 2) - (spacing * 2); // 减去padding和间距
+          const double padding = 16.0; // 左右padding
+          const double spacing = 12.0; // 列间距
+          final double availableWidth = screenWidth -
+              (padding * 2) -
+              (spacing * (crossAxisCount - 1)); // 减去padding和间距
           // 确保最小宽度，防止负宽度约束
-          final double minItemWidth = 80.0; // 最小项目宽度
-          final double calculatedItemWidth = availableWidth / 3;
+          const double minItemWidth = 80.0; // 最小项目宽度
+          final double calculatedItemWidth = availableWidth / crossAxisCount;
           final double itemWidth = math.max(calculatedItemWidth, minItemWidth);
           final double itemHeight = itemWidth * 2.0; // 增加高度比例，确保有足够空间避免溢出
-          
+
           return GridView.builder(
             padding: const EdgeInsets.all(16),
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
             gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 3, // 严格3列布局
+              crossAxisCount: crossAxisCount,
               childAspectRatio: itemWidth / itemHeight, // 精确计算宽高比
               crossAxisSpacing: spacing, // 列间距
-              mainAxisSpacing: 16, // 行间距
+              mainAxisSpacing: isTablet ? 0 : 16, // 行间距
             ),
-            itemCount: 6, // 显示6个骨架卡片
+            itemCount: isTablet ? 12 : 6, // 平板显示12个，手机显示6个骨架卡片
             itemBuilder: (context, index) {
               return _buildSkeletonCard(itemWidth);
             },
@@ -308,7 +316,7 @@ class _FavoritesGridState extends State<FavoritesGrid>
   /// 构建骨架卡片
   Widget _buildSkeletonCard(double width) {
     final double height = width * 1.4; // 保持与VideoCard相同的比例
-    
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
@@ -429,38 +437,47 @@ class _FavoritesGridState extends State<FavoritesGrid>
       color: const Color(0xFF27ae60),
       child: LayoutBuilder(
         builder: (context, constraints) {
-          // 计算每列的宽度，确保严格三列布局
+          final isTablet = DeviceUtils.isTablet(context);
+          // 平板模式6列，手机模式3列
+          final int crossAxisCount = isTablet ? 6 : 3;
+
+          // 计算每列的宽度
           final double screenWidth = constraints.maxWidth;
-          final double padding = 16.0; // 左右padding
-          final double spacing = 12.0; // 列间距
-          final double availableWidth = screenWidth - (padding * 2) - (spacing * 2); // 减去padding和间距
+          const double padding = 16.0; // 左右padding
+          const double spacing = 12.0; // 列间距
+          final double availableWidth = screenWidth -
+              (padding * 2) -
+              (spacing * (crossAxisCount - 1)); // 减去padding和间距
           // 确保最小宽度，防止负宽度约束
-          final double minItemWidth = 80.0; // 最小项目宽度
-          final double calculatedItemWidth = availableWidth / 3;
+          const double minItemWidth = 80.0; // 最小项目宽度
+          final double calculatedItemWidth = availableWidth / crossAxisCount;
           final double itemWidth = math.max(calculatedItemWidth, minItemWidth);
           final double itemHeight = itemWidth * 2.0; // 增加高度比例，确保有足够空间避免溢出
-          
+
           return GridView.builder(
             padding: const EdgeInsets.all(16),
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
             gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 3, // 严格3列布局
+              crossAxisCount: crossAxisCount,
               childAspectRatio: itemWidth / itemHeight, // 精确计算宽高比
               crossAxisSpacing: spacing, // 列间距
-              mainAxisSpacing: 16, // 行间距
+              mainAxisSpacing: isTablet ? 0 : 16, // 行间距
             ),
             itemCount: _favorites.length,
             itemBuilder: (context, index) {
               final favorite = _favorites[index];
               final playRecord = _favoriteToPlayRecord(favorite);
-              
+
               return VideoCard(
                 videoInfo: VideoInfo.fromPlayRecord(playRecord),
                 onTap: () => widget.onVideoTap(playRecord),
                 from: 'favorite', // 统一设置为收藏场景
                 cardWidth: itemWidth, // 传递计算出的宽度
-                onGlobalMenuAction: widget.onGlobalMenuAction != null ? (action) => widget.onGlobalMenuAction!(VideoInfo.fromPlayRecord(playRecord), action) : null,
+                onGlobalMenuAction: widget.onGlobalMenuAction != null
+                    ? (action) => widget.onGlobalMenuAction!(
+                        VideoInfo.fromPlayRecord(playRecord), action)
+                    : null,
                 isFavorited: true, // 收藏页面默认已收藏
               );
             },

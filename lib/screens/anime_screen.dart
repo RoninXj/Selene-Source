@@ -388,7 +388,9 @@ class _AnimeScreenState extends State<AnimeScreen> {
         setState(() {
           if (result.success && result.data != null) {
             _bangumiList.clear();
-            _bangumiList.addAll(result.data!);
+            _bangumiList.addAll(
+              result.data!.where((item) => item.images.bestImageUrl.isNotEmpty).toList()
+            );
             _hasMore = false; // Bangumi 数据不支持分页
           } else {
             _errorMessage = result.message ?? '加载失败';

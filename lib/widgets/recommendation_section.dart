@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import '../models/video_info.dart';
 import '../services/theme_service.dart';
+import '../utils/device_utils.dart';
 import 'video_card.dart';
 import 'video_menu_bottom_sheet.dart';
 import 'shimmer_effect.dart';
@@ -108,14 +109,18 @@ class RecommendationSection extends StatelessWidget {
   Widget _buildContent() {
     return LayoutBuilder(
       builder: (context, constraints) {
+        final isTablet = DeviceUtils.isTablet(context);
+        // 平板模式显示5.75个卡片，手机模式使用传入的cardCount
+        final double visibleCards = isTablet ? 5.75 : cardCount;
+        
         // 计算卡片宽度
         final double screenWidth = constraints.maxWidth;
-        final double padding = 32.0; // 左右padding (16 * 2)
-        final double spacing = 12.0; // 卡片间距
+        const double padding = 32.0; // 左右padding (16 * 2)
+        const double spacing = 12.0; // 卡片间距
         final double availableWidth = screenWidth - padding;
         // 确保最小宽度，防止负宽度约束
-        final double minCardWidth = 120.0; // 最小卡片宽度
-        final double calculatedCardWidth = (availableWidth - (spacing * (cardCount - 1))) / cardCount;
+        const double minCardWidth = 120.0; // 最小卡片宽度
+        final double calculatedCardWidth = (availableWidth - (spacing * (visibleCards - 1))) / visibleCards;
         final double cardWidth = math.max(calculatedCardWidth, minCardWidth);
         
         return SizedBox(
@@ -150,14 +155,19 @@ class RecommendationSection extends StatelessWidget {
   Widget _buildLoadingState() {
     return LayoutBuilder(
       builder: (context, constraints) {
+        final isTablet = DeviceUtils.isTablet(context);
+        // 平板模式显示5.75个卡片，手机模式使用传入的cardCount
+        final double visibleCards = isTablet ? 5.75 : cardCount;
+        final int skeletonCount = isTablet ? 6 : 3; // 骨架卡片数量
+        
         // 计算卡片宽度
         final double screenWidth = constraints.maxWidth;
-        final double padding = 32.0; // 左右padding (16 * 2)
-        final double spacing = 12.0; // 卡片间距
+        const double padding = 32.0; // 左右padding (16 * 2)
+        const double spacing = 12.0; // 卡片间距
         final double availableWidth = screenWidth - padding;
         // 确保最小宽度，防止负宽度约束
-        final double minCardWidth = 120.0; // 最小卡片宽度
-        final double calculatedCardWidth = (availableWidth - (spacing * (cardCount - 1))) / cardCount;
+        const double minCardWidth = 120.0; // 最小卡片宽度
+        final double calculatedCardWidth = (availableWidth - (spacing * (visibleCards - 1))) / visibleCards;
         final double cardWidth = math.max(calculatedCardWidth, minCardWidth);
         
         return Container(
@@ -165,12 +175,12 @@ class RecommendationSection extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: ListView.builder(
             scrollDirection: Axis.horizontal,
-            itemCount: 3, // 显示3个骨架卡片
+            itemCount: skeletonCount,
             itemBuilder: (context, index) {
               return Container(
                 width: cardWidth,
                 margin: EdgeInsets.only(
-                  right: index < 2 ? spacing : 0,
+                  right: index < skeletonCount - 1 ? spacing : 0,
                 ),
                 child: _buildSkeletonCard(cardWidth),
               );

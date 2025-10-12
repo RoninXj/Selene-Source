@@ -7,6 +7,7 @@ import '../models/video_info.dart';
 import '../services/api_service.dart';
 import '../services/page_cache_service.dart';
 import '../services/theme_service.dart';
+import '../utils/device_utils.dart';
 import 'video_card.dart';
 import '../utils/image_url.dart';
 import 'video_menu_bottom_sheet.dart';
@@ -449,14 +450,18 @@ class _ContinueWatchingSectionState extends State<ContinueWatchingSection>
           else
             LayoutBuilder(
               builder: (context, constraints) {
-                // 计算卡片宽度，确保能显示2.75个卡片
+                final isTablet = DeviceUtils.isTablet(context);
+                // 平板模式显示 5.75个卡片，手机模式显示2.75个卡片
+                final double visibleCards = isTablet ? 5.75 : 2.75;
+                
+                // 计算卡片宽度
                 final double screenWidth = constraints.maxWidth;
                 const double padding = 32.0; // 左右padding (16 * 2)
                 const double spacing = 12.0; // 卡片间距
                 final double availableWidth = screenWidth - padding;
                 // 确保最小宽度，防止负宽度约束
                 const double minCardWidth = 120.0; // 最小卡片宽度
-                final double calculatedCardWidth = (availableWidth - (spacing * 1.75)) / 2.75;
+                final double calculatedCardWidth = (availableWidth - (spacing * (visibleCards - 1))) / visibleCards;
                 final double cardWidth = math.max(calculatedCardWidth, minCardWidth);
                 final double cardHeight = (cardWidth * 1.5) + 50; // 缓存高度计算
                 
@@ -496,14 +501,19 @@ class _ContinueWatchingSectionState extends State<ContinueWatchingSection>
   Widget _buildLoadingState() {
     return LayoutBuilder(
       builder: (context, constraints) {
-        // 计算卡片宽度，确保能显示2.75个卡片
+        final isTablet = DeviceUtils.isTablet(context);
+        // 平板模式显示5.75个卡片，手机模式显示2.75个卡片
+        final double visibleCards = isTablet ? 5.75 : 2.75;
+        final int skeletonCount = isTablet ? 6 : 3; // 骨架卡片数量
+        
+        // 计算卡片宽度
         final double screenWidth = constraints.maxWidth;
         const double padding = 32.0; // 左右padding (16 * 2)
         const double spacing = 12.0; // 卡片间距
         final double availableWidth = screenWidth - padding;
         // 确保最小宽度，防止负宽度约束
         const double minCardWidth = 120.0; // 最小卡片宽度
-        final double calculatedCardWidth = (availableWidth - (spacing * 1.75)) / 2.75;
+        final double calculatedCardWidth = (availableWidth - (spacing * (visibleCards - 1))) / visibleCards;
         final double cardWidth = math.max(calculatedCardWidth, minCardWidth);
         final double cardHeight = (cardWidth * 1.5) + 50; // 缓存高度计算
         
@@ -512,12 +522,12 @@ class _ContinueWatchingSectionState extends State<ContinueWatchingSection>
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: ListView.builder(
             scrollDirection: Axis.horizontal,
-            itemCount: 3, // 显示3个骨架卡片，最后一个只显示一半
+            itemCount: skeletonCount,
             itemBuilder: (context, index) {
               return Container(
                 width: cardWidth,
                 margin: EdgeInsets.only(
-                  right: index < 2 ? spacing : 0,
+                  right: index < skeletonCount - 1 ? spacing : 0,
                 ),
                 child: _buildSkeletonCard(cardWidth),
               );

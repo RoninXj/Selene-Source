@@ -267,24 +267,6 @@ class BangumiItem {
     };
   }
 
-  /// 转换为PlayRecord格式，用于播放记录
-  PlayRecord toPlayRecord() {
-    return PlayRecord(
-      id: id.toString(),
-      source: 'bangumi',
-      title: nameCn?.isNotEmpty == true ? nameCn! : name,
-      sourceName: 'Bangumi',
-      year: airDate.split('-').first,
-      cover: images.bestImageUrl,
-      index: 1,
-      totalEpisodes: 1,
-      playTime: 0,
-      totalTime: 0,
-      saveTime: DateTime.now().millisecondsSinceEpoch,
-      searchTitle: nameCn?.isNotEmpty == true ? nameCn! : name,
-    );
-  }
-
   /// 转换为VideoInfo格式，用于VideoCard显示
   VideoInfo toVideoInfo() {
     return VideoInfo(

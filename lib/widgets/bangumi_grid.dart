@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../models/bangumi.dart';
+import '../utils/device_utils.dart';
 import 'video_card.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'video_menu_bottom_sheet.dart';
@@ -45,12 +46,16 @@ class BangumiGrid extends StatelessWidget {
   Widget _buildLoadingState() {
     return LayoutBuilder(
       builder: (context, constraints) {
+        final isTablet = DeviceUtils.isTablet(context);
+        // 平板模式6列，手机模式3列
+        final int crossAxisCount = isTablet ? 6 : 3;
+        
         final double screenWidth = constraints.maxWidth;
-        final double padding = 16.0;
-        final double spacing = 12.0;
-        final double availableWidth = screenWidth - (padding * 2) - (spacing * 2);
-        final double minItemWidth = 80.0;
-        final double calculatedItemWidth = availableWidth / 3;
+        const double padding = 16.0;
+        const double spacing = 12.0;
+        final double availableWidth = screenWidth - (padding * 2) - (spacing * (crossAxisCount - 1));
+        const double minItemWidth = 80.0;
+        final double calculatedItemWidth = availableWidth / crossAxisCount;
         final double itemWidth = math.max(calculatedItemWidth, minItemWidth);
         final double itemHeight = itemWidth * 2.0;
         
@@ -59,12 +64,12 @@ class BangumiGrid extends StatelessWidget {
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
           gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 3,
+            crossAxisCount: crossAxisCount,
             childAspectRatio: itemWidth / itemHeight,
             crossAxisSpacing: spacing,
-            mainAxisSpacing: 6,
+            mainAxisSpacing: isTablet ? 0 : 6,
           ),
-          itemCount: 6,
+          itemCount: isTablet ? 12 : 6,
           itemBuilder: (context, index) {
             return _buildSkeletonCard(itemWidth);
           },
@@ -170,12 +175,16 @@ class BangumiGrid extends StatelessWidget {
   Widget _buildBangumiGrid() {
     return LayoutBuilder(
       builder: (context, constraints) {
+        final isTablet = DeviceUtils.isTablet(context);
+        // 平板模式6列，手机模式3列
+        final int crossAxisCount = isTablet ? 6 : 3;
+        
         final double screenWidth = constraints.maxWidth;
-        final double padding = 16.0;
-        final double spacing = 12.0;
-        final double availableWidth = screenWidth - (padding * 2) - (spacing * 2);
-        final double minItemWidth = 80.0;
-        final double calculatedItemWidth = availableWidth / 3;
+        const double padding = 16.0;
+        const double spacing = 12.0;
+        final double availableWidth = screenWidth - (padding * 2) - (spacing * (crossAxisCount - 1));
+        const double minItemWidth = 80.0;
+        final double calculatedItemWidth = availableWidth / crossAxisCount;
         final double itemWidth = math.max(calculatedItemWidth, minItemWidth);
         final double itemHeight = itemWidth * 2.0;
         
@@ -184,10 +193,10 @@ class BangumiGrid extends StatelessWidget {
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
           gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 3,
+            crossAxisCount: crossAxisCount,
             childAspectRatio: itemWidth / itemHeight,
             crossAxisSpacing: spacing,
-            mainAxisSpacing: 6,
+            mainAxisSpacing: isTablet ? 0 : 6,
           ),
           itemCount: bangumiItems!.length,
           itemBuilder: (context, index) {

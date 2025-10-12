@@ -304,24 +304,6 @@ class DoubanMovie {
     };
   }
 
-  /// 转换为PlayRecord格式，用于播放记录
-  PlayRecord toPlayRecord() {
-    return PlayRecord(
-      id: id,
-      source: 'douban',
-      title: title,
-      sourceName: '豆瓣',
-      year: year,
-      cover: poster,
-      index: 1,
-      totalEpisodes: 1,
-      playTime: 0,
-      totalTime: 0,
-      saveTime: DateTime.now().millisecondsSinceEpoch,
-      searchTitle: title,
-    );
-  }
-
   /// 转换为VideoInfo格式，用于VideoCard显示
   VideoInfo toVideoInfo() {
     return VideoInfo(

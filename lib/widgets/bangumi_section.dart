@@ -32,8 +32,7 @@ class _BangumiSectionState extends State<BangumiSection> {
   List<BangumiItem> _bangumiItems = [];
   bool _isLoading = true;
   bool _hasError = false;
-  
-  
+
   // 静态变量存储当前实例
   static _BangumiSectionState? _currentInstance;
 
@@ -97,8 +96,8 @@ class _BangumiSectionState extends State<BangumiSection> {
       if (item.rating.score > 0) {
         // 如果是整数则添加.0，否则保留一位小数
         final score = item.rating.score;
-        final formattedScore = score == score.toInt() 
-            ? '${score.toInt()}.0' 
+        final formattedScore = score == score.toInt()
+            ? '${score.toInt()}.0'
             : score.toStringAsFixed(1);
         rateMap[item.id.toString()] = formattedScore;
       }

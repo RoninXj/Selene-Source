@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
 import '../services/theme_service.dart';
+import '../utils/device_utils.dart';
 import 'user_menu.dart';
 
 class MainLayout extends StatefulWidget {
@@ -288,6 +289,8 @@ class _MainLayoutState extends State<MainLayout> {
       {'icon': LucideIcons.clover, 'label': '综艺'},
     ];
 
+    final isTablet = DeviceUtils.isTablet(context);
+
     return Container(
       decoration: BoxDecoration(
         color: themeService.isDarkMode 
@@ -309,49 +312,66 @@ class _MainLayoutState extends State<MainLayout> {
         bottom: MediaQuery.of(context).padding.bottom + 8, // 手动处理底部安全区域
       ),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: navItems.asMap().entries.map((entry) {
-          int index = entry.key;
-          Map<String, dynamic> item = entry.value;
-          bool isSelected = !widget.isSearchMode && widget.currentBottomNavIndex == index;
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          // 平板模式下添加左侧空白
+          if (isTablet) const Spacer(flex: 3),
           
-          return GestureDetector(
-            onTap: () {
-              widget.onBottomNavChanged(index);
-            },
-            behavior: HitTestBehavior.opaque, // 确保整个区域都可以点击
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    item['icon'],
-                    color: isSelected 
-                        ? const Color(0xFF27ae60) 
-                        : themeService.isDarkMode 
-                            ? const Color(0xFFb0b0b0)
-                            : const Color(0xFF7f8c8d),
-                    size: 24,
+          // 导航按钮
+          ...navItems.asMap().entries.expand((entry) {
+            int index = entry.key;
+            Map<String, dynamic> item = entry.value;
+            bool isSelected = !widget.isSearchMode && widget.currentBottomNavIndex == index;
+            
+            return [
+              GestureDetector(
+                onTap: () {
+                  widget.onBottomNavChanged(index);
+                },
+                behavior: HitTestBehavior.opaque, // 确保整个区域都可以点击
+                child: Container(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: isTablet ? 16 : 12,
+                    vertical: 8,
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    item['label'],
-                    style: GoogleFonts.poppins(
-                      fontSize: 12,
-                      fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
-                      color: isSelected 
-                          ? const Color(0xFF27ae60) 
-                          : themeService.isDarkMode 
-                              ? const Color(0xFFb0b0b0)
-                              : const Color(0xFF7f8c8d),
-                    ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        item['icon'],
+                        color: isSelected 
+                            ? const Color(0xFF27ae60) 
+                            : themeService.isDarkMode 
+                                ? const Color(0xFFb0b0b0)
+                                : const Color(0xFF7f8c8d),
+                        size: 24,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        item['label'],
+                        style: GoogleFonts.poppins(
+                          fontSize: 12,
+                          fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+                          color: isSelected 
+                              ? const Color(0xFF27ae60) 
+                              : themeService.isDarkMode 
+                                  ? const Color(0xFFb0b0b0)
+                                  : const Color(0xFF7f8c8d),
+                        ),
+                      ),
+                    ],
                   ),
-                ],
+                ),
               ),
-            ),
-          );
-        }).toList(),
+              // 平板模式下在按钮之间添加间距
+              if (isTablet && index < navItems.length - 1)
+                const SizedBox(width: 36),
+            ];
+          }),
+          
+          // 平板模式下添加右侧空白
+          if (isTablet) const Spacer(flex: 3),
+        ],
       ),
     );
   }

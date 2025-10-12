@@ -13,6 +13,7 @@ import '../widgets/custom_switch.dart';
 import '../widgets/favorites_grid.dart';
 import '../widgets/search_result_agg_grid.dart';
 import '../widgets/search_results_grid.dart';
+import '../utils/device_utils.dart';
 import 'player_screen.dart';
 
 class SelectorOption {
@@ -602,7 +603,9 @@ class _SearchScreenState extends State<SearchScreen>
   }
 
   Widget _buildSearchBox(ThemeService themeService) {
-    return Container(
+    final isTablet = DeviceUtils.isTablet(context);
+    
+    final searchBoxWidget = Container(
       decoration: BoxDecoration(
         color: themeService.isDarkMode ? const Color(0xFF1e1e1e) : Colors.white,
         borderRadius: BorderRadius.circular(12),
@@ -684,6 +687,18 @@ class _SearchScreenState extends State<SearchScreen>
         },
       ),
     );
+
+    // 平板模式下居中并限制宽度为50%
+    if (isTablet) {
+      return Center(
+        child: FractionallySizedBox(
+          widthFactor: 0.5,
+          child: searchBoxWidget,
+        ),
+      );
+    }
+
+    return searchBoxWidget;
   }
 
   Widget _buildSearchHistory(ThemeService themeService) {

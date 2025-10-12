@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import '../services/user_data_service.dart';
+import '../utils/device_utils.dart';
 import 'home_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -33,7 +34,7 @@ class _LoginScreenState extends State<LoginScreen> {
   void _loadSavedUserData() async {
     final userData = await UserDataService.getAllUserData();
     bool hasData = false;
-    
+
     if (userData['serverUrl'] != null) {
       _urlController.text = userData['serverUrl']!;
       hasData = true;
@@ -46,7 +47,7 @@ class _LoginScreenState extends State<LoginScreen> {
       _passwordController.text = userData['password']!;
       hasData = true;
     }
-    
+
     // 如果有数据被加载，更新UI状态
     if (hasData && mounted) {
       setState(() {
@@ -84,7 +85,7 @@ class _LoginScreenState extends State<LoginScreen> {
   String _parseCookies(http.Response response) {
     // 解析 Set-Cookie 头部
     List<String> cookies = [];
-    
+
     // 获取所有 Set-Cookie 头部
     final setCookieHeaders = response.headers['set-cookie'];
     if (setCookieHeaders != null) {
@@ -94,7 +95,7 @@ class _LoginScreenState extends State<LoginScreen> {
         cookies.add(cookieParts[0].trim());
       }
     }
-    
+
     return cookies.join('; ');
   }
 
@@ -129,7 +130,7 @@ class _LoginScreenState extends State<LoginScreen> {
         // 处理 URL
         String baseUrl = _processUrl(_urlController.text);
         String loginUrl = '$baseUrl/api/login';
-        
+
         // 发送登录请求
         final response = await http.post(
           Uri.parse(loginUrl),
@@ -151,7 +152,7 @@ class _LoginScreenState extends State<LoginScreen> {
           case 200:
             // 解析并保存 cookies
             String cookies = _parseCookies(response);
-            
+
             // 保存用户数据
             await UserDataService.saveUserData(
               serverUrl: baseUrl,
@@ -159,9 +160,9 @@ class _LoginScreenState extends State<LoginScreen> {
               password: _passwordController.text,
               cookies: cookies,
             );
-            
+
             _showToast('登录成功！', const Color(0xFF27ae60));
-            
+
             // 跳转到首页
             Navigator.of(context).pushReplacement(
               MaterialPageRoute(builder: (context) => const HomeScreen()),
@@ -187,6 +188,8 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isTablet = DeviceUtils.isTablet(context);
+
     return Scaffold(
       body: Container(
         decoration: const BoxDecoration(
@@ -207,259 +210,525 @@ class _LoginScreenState extends State<LoginScreen> {
         child: SafeArea(
           child: Center(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 32.0, vertical: 24.0),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  // Selene 标题
-                  Text(
-                    'Selene',
-                    style: GoogleFonts.sourceCodePro(
-                      fontSize: 42,
-                      fontWeight: FontWeight.w400,
-                      color: const Color(0xFF2c3e50),
-                      letterSpacing: 1.5,
-                    ),
-                  ),
-                  const SizedBox(height: 40),
-
-                  // 登录表单 - 无边框设计
-                  Form(
-                    key: _formKey,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        // URL 输入框
-                        TextFormField(
-                          controller: _urlController,
-                          style: GoogleFonts.poppins(
-                            fontSize: 16,
-                            color: const Color(0xFF2c3e50),
-                          ),
-                          decoration: InputDecoration(
-                            labelText: '服务器地址',
-                            labelStyle: GoogleFonts.poppins(
-                              color: const Color(0xFF7f8c8d),
-                              fontSize: 14,
-                            ),
-                            hintText: 'https://example.com',
-                            hintStyle: GoogleFonts.poppins(
-                              color: const Color(0xFFbdc3c7),
-                              fontSize: 16,
-                            ),
-                            prefixIcon: const Icon(
-                              Icons.link,
-                              color: Color(0xFF7f8c8d),
-                              size: 20,
-                            ),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: BorderSide.none,
-                            ),
-                            enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: BorderSide.none,
-                            ),
-                            focusedBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: BorderSide.none,
-                            ),
-                            filled: true,
-                            fillColor: Colors.white.withOpacity(0.6),
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 20,
-                              vertical: 18,
-                            ),
-                          ),
-                          validator: (value) {
-                            if (value == null || value.isEmpty) {
-                              return '请输入服务器地址';
-                            }
-                            final uri = Uri.tryParse(value);
-                            if (uri == null || uri.scheme.isEmpty || uri.host.isEmpty) {
-                              return '请输入有效的URL地址';
-                            }
-                            return null;
-                          },
-                        ),
-                        const SizedBox(height: 20),
-
-                        // 用户名输入框
-                        TextFormField(
-                          controller: _usernameController,
-                          style: GoogleFonts.poppins(
-                            fontSize: 16,
-                            color: const Color(0xFF2c3e50),
-                          ),
-                          decoration: InputDecoration(
-                            labelText: '用户名',
-                            labelStyle: GoogleFonts.poppins(
-                              color: const Color(0xFF7f8c8d),
-                              fontSize: 14,
-                            ),
-                            hintText: '请输入用户名',
-                            hintStyle: GoogleFonts.poppins(
-                              color: const Color(0xFFbdc3c7),
-                              fontSize: 16,
-                            ),
-                            prefixIcon: const Icon(
-                              Icons.person,
-                              color: Color(0xFF7f8c8d),
-                              size: 20,
-                            ),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: BorderSide.none,
-                            ),
-                            enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: BorderSide.none,
-                            ),
-                            focusedBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: BorderSide.none,
-                            ),
-                            filled: true,
-                            fillColor: Colors.white.withOpacity(0.6),
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 20,
-                              vertical: 18,
-                            ),
-                          ),
-                          validator: (value) {
-                            if (value == null || value.isEmpty) {
-                              return '请输入用户名';
-                            }
-                            return null;
-                          },
-                        ),
-                        const SizedBox(height: 20),
-
-                        // 密码输入框
-                        TextFormField(
-                          controller: _passwordController,
-                          obscureText: !_isPasswordVisible,
-                          style: GoogleFonts.poppins(
-                            fontSize: 16,
-                            color: const Color(0xFF2c3e50),
-                          ),
-                          decoration: InputDecoration(
-                            labelText: '密码',
-                            labelStyle: GoogleFonts.poppins(
-                              color: const Color(0xFF7f8c8d),
-                              fontSize: 14,
-                            ),
-                            hintText: '请输入密码',
-                            hintStyle: GoogleFonts.poppins(
-                              color: const Color(0xFFbdc3c7),
-                              fontSize: 16,
-                            ),
-                            prefixIcon: const Icon(
-                              Icons.lock,
-                              color: Color(0xFF7f8c8d),
-                              size: 20,
-                            ),
-                            suffixIcon: IconButton(
-                              icon: Icon(
-                                _isPasswordVisible
-                                    ? Icons.visibility
-                                    : Icons.visibility_off,
-                                color: const Color(0xFF7f8c8d),
-                                size: 20,
-                              ),
-                              onPressed: () {
-                                setState(() {
-                                  _isPasswordVisible = !_isPasswordVisible;
-                                });
-                              },
-                            ),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: BorderSide.none,
-                            ),
-                            enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: BorderSide.none,
-                            ),
-                            focusedBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: BorderSide.none,
-                            ),
-                            filled: true,
-                            fillColor: Colors.white.withOpacity(0.6),
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 20,
-                              vertical: 18,
-                            ),
-                          ),
-                          validator: (value) {
-                            if (value == null || value.isEmpty) {
-                              return '请输入密码';
-                            }
-                            return null;
-                          },
-                        ),
-                        const SizedBox(height: 32),
-
-                        // 登录按钮
-                        ElevatedButton(
-                          onPressed: (_isLoading || !_isFormValid) ? null : _handleLogin,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: _isFormValid && !_isLoading 
-                                ? const Color(0xFF2c3e50) // 与Selene logo相同的颜色
-                                : const Color(0xFFbdc3c7), // 禁用时的浅灰色
-                            foregroundColor: _isFormValid && !_isLoading 
-                                ? Colors.white 
-                                : const Color(0xFF7f8c8d), // 禁用时的文字颜色
-                            padding: const EdgeInsets.symmetric(vertical: 18),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            elevation: 0,
-                            shadowColor: Colors.transparent,
-                          ),
-                          child: _isLoading
-                              ? Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    SizedBox(
-                                      height: 18,
-                                      width: 18,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                        valueColor: AlwaysStoppedAnimation<Color>(
-                                          Colors.white,
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 12),
-                                    Text(
-                                      '登录中...',
-                                      style: GoogleFonts.poppins(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.w500,
-                                        color: Colors.white,
-                                      ),
-                                    ),
-                                  ],
-                                )
-                              : Text(
-                                  '登录',
-                                  style: GoogleFonts.poppins(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w500,
-                                    letterSpacing: 1.0,
-                                  ),
-                                ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
+              padding: EdgeInsets.symmetric(
+                horizontal: isTablet ? 0 : 32.0,
+                vertical: 24.0,
               ),
+              child: isTablet ? _buildTabletLayout() : _buildMobileLayout(),
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  // 手机端布局（保持原样）
+  Widget _buildMobileLayout() {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        // Selene 标题
+        Text(
+          'Selene',
+          style: GoogleFonts.sourceCodePro(
+            fontSize: 42,
+            fontWeight: FontWeight.w400,
+            color: const Color(0xFF2c3e50),
+            letterSpacing: 1.5,
+          ),
+        ),
+        const SizedBox(height: 40),
+
+        // 登录表单 - 无边框设计
+        Form(
+          key: _formKey,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // URL 输入框
+              TextFormField(
+                controller: _urlController,
+                style: GoogleFonts.poppins(
+                  fontSize: 16,
+                  color: const Color(0xFF2c3e50),
+                ),
+                decoration: InputDecoration(
+                  labelText: '服务器地址',
+                  labelStyle: GoogleFonts.poppins(
+                    color: const Color(0xFF7f8c8d),
+                    fontSize: 14,
+                  ),
+                  hintText: 'https://example.com',
+                  hintStyle: GoogleFonts.poppins(
+                    color: const Color(0xFFbdc3c7),
+                    fontSize: 16,
+                  ),
+                  prefixIcon: const Icon(
+                    Icons.link,
+                    color: Color(0xFF7f8c8d),
+                    size: 20,
+                  ),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                  filled: true,
+                  fillColor: Colors.white.withOpacity(0.6),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 18,
+                  ),
+                ),
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return '请输入服务器地址';
+                  }
+                  final uri = Uri.tryParse(value);
+                  if (uri == null || uri.scheme.isEmpty || uri.host.isEmpty) {
+                    return '请输入有效的URL地址';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 20),
+
+              // 用户名输入框
+              TextFormField(
+                controller: _usernameController,
+                style: GoogleFonts.poppins(
+                  fontSize: 16,
+                  color: const Color(0xFF2c3e50),
+                ),
+                decoration: InputDecoration(
+                  labelText: '用户名',
+                  labelStyle: GoogleFonts.poppins(
+                    color: const Color(0xFF7f8c8d),
+                    fontSize: 14,
+                  ),
+                  hintText: '请输入用户名',
+                  hintStyle: GoogleFonts.poppins(
+                    color: const Color(0xFFbdc3c7),
+                    fontSize: 16,
+                  ),
+                  prefixIcon: const Icon(
+                    Icons.person,
+                    color: Color(0xFF7f8c8d),
+                    size: 20,
+                  ),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                  filled: true,
+                  fillColor: Colors.white.withOpacity(0.6),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 18,
+                  ),
+                ),
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return '请输入用户名';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 20),
+
+              // 密码输入框
+              TextFormField(
+                controller: _passwordController,
+                obscureText: !_isPasswordVisible,
+                style: GoogleFonts.poppins(
+                  fontSize: 16,
+                  color: const Color(0xFF2c3e50),
+                ),
+                decoration: InputDecoration(
+                  labelText: '密码',
+                  labelStyle: GoogleFonts.poppins(
+                    color: const Color(0xFF7f8c8d),
+                    fontSize: 14,
+                  ),
+                  hintText: '请输入密码',
+                  hintStyle: GoogleFonts.poppins(
+                    color: const Color(0xFFbdc3c7),
+                    fontSize: 16,
+                  ),
+                  prefixIcon: const Icon(
+                    Icons.lock,
+                    color: Color(0xFF7f8c8d),
+                    size: 20,
+                  ),
+                  suffixIcon: IconButton(
+                    icon: Icon(
+                      _isPasswordVisible
+                          ? Icons.visibility
+                          : Icons.visibility_off,
+                      color: const Color(0xFF7f8c8d),
+                      size: 20,
+                    ),
+                    onPressed: () {
+                      setState(() {
+                        _isPasswordVisible = !_isPasswordVisible;
+                      });
+                    },
+                  ),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                  filled: true,
+                  fillColor: Colors.white.withOpacity(0.6),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 18,
+                  ),
+                ),
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return '请输入密码';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 32),
+
+              // 登录按钮
+              ElevatedButton(
+                onPressed: (_isLoading || !_isFormValid) ? null : _handleLogin,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _isFormValid && !_isLoading
+                      ? const Color(0xFF2c3e50) // 与Selene logo相同的颜色
+                      : const Color(0xFFbdc3c7), // 禁用时的浅灰色
+                  foregroundColor: _isFormValid && !_isLoading
+                      ? Colors.white
+                      : const Color(0xFF7f8c8d), // 禁用时的文字颜色
+                  padding: const EdgeInsets.symmetric(vertical: 18),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  elevation: 0,
+                  shadowColor: Colors.transparent,
+                ),
+                child: _isLoading
+                    ? Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          SizedBox(
+                            height: 18,
+                            width: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                Colors.white,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Text(
+                            '登录中...',
+                            style: GoogleFonts.poppins(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w500,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ],
+                      )
+                    : Text(
+                        '登录',
+                        style: GoogleFonts.poppins(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
+                          letterSpacing: 1.0,
+                        ),
+                      ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  // 平板端布局（与手机端风格一致，只是限制宽度）
+  Widget _buildTabletLayout() {
+    return Container(
+      constraints: const BoxConstraints(maxWidth: 480),
+      padding: const EdgeInsets.symmetric(horizontal: 32.0),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          // Selene 标题
+          Text(
+            'Selene',
+            style: GoogleFonts.sourceCodePro(
+              fontSize: 42,
+              fontWeight: FontWeight.w400,
+              color: const Color(0xFF2c3e50),
+              letterSpacing: 1.5,
+            ),
+          ),
+          const SizedBox(height: 40),
+
+          // 登录表单 - 无边框设计
+          Form(
+            key: _formKey,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // URL 输入框
+                TextFormField(
+                  controller: _urlController,
+                  style: GoogleFonts.poppins(
+                    fontSize: 16,
+                    color: const Color(0xFF2c3e50),
+                  ),
+                  decoration: InputDecoration(
+                    labelText: '服务器地址',
+                    labelStyle: GoogleFonts.poppins(
+                      color: const Color(0xFF7f8c8d),
+                      fontSize: 14,
+                    ),
+                    hintText: 'https://example.com',
+                    hintStyle: GoogleFonts.poppins(
+                      color: const Color(0xFFbdc3c7),
+                      fontSize: 16,
+                    ),
+                    prefixIcon: const Icon(
+                      Icons.link,
+                      color: Color(0xFF7f8c8d),
+                      size: 20,
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                    filled: true,
+                    fillColor: Colors.white.withOpacity(0.6),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 18,
+                    ),
+                  ),
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return '请输入服务器地址';
+                    }
+                    final uri = Uri.tryParse(value);
+                    if (uri == null || uri.scheme.isEmpty || uri.host.isEmpty) {
+                      return '请输入有效的URL地址';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 20),
+
+                // 用户名输入框
+                TextFormField(
+                  controller: _usernameController,
+                  style: GoogleFonts.poppins(
+                    fontSize: 16,
+                    color: const Color(0xFF2c3e50),
+                  ),
+                  decoration: InputDecoration(
+                    labelText: '用户名',
+                    labelStyle: GoogleFonts.poppins(
+                      color: const Color(0xFF7f8c8d),
+                      fontSize: 14,
+                    ),
+                    hintText: '请输入用户名',
+                    hintStyle: GoogleFonts.poppins(
+                      color: const Color(0xFFbdc3c7),
+                      fontSize: 16,
+                    ),
+                    prefixIcon: const Icon(
+                      Icons.person,
+                      color: Color(0xFF7f8c8d),
+                      size: 20,
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                    filled: true,
+                    fillColor: Colors.white.withOpacity(0.6),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 18,
+                    ),
+                  ),
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return '请输入用户名';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 20),
+
+                // 密码输入框
+                TextFormField(
+                  controller: _passwordController,
+                  obscureText: !_isPasswordVisible,
+                  style: GoogleFonts.poppins(
+                    fontSize: 16,
+                    color: const Color(0xFF2c3e50),
+                  ),
+                  decoration: InputDecoration(
+                    labelText: '密码',
+                    labelStyle: GoogleFonts.poppins(
+                      color: const Color(0xFF7f8c8d),
+                      fontSize: 14,
+                    ),
+                    hintText: '请输入密码',
+                    hintStyle: GoogleFonts.poppins(
+                      color: const Color(0xFFbdc3c7),
+                      fontSize: 16,
+                    ),
+                    prefixIcon: const Icon(
+                      Icons.lock,
+                      color: Color(0xFF7f8c8d),
+                      size: 20,
+                    ),
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        _isPasswordVisible
+                            ? Icons.visibility
+                            : Icons.visibility_off,
+                        color: const Color(0xFF7f8c8d),
+                        size: 20,
+                      ),
+                      onPressed: () {
+                        setState(() {
+                          _isPasswordVisible = !_isPasswordVisible;
+                        });
+                      },
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                    filled: true,
+                    fillColor: Colors.white.withOpacity(0.6),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 18,
+                    ),
+                  ),
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return '请输入密码';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 32),
+
+                // 登录按钮
+                ElevatedButton(
+                  onPressed:
+                      (_isLoading || !_isFormValid) ? null : _handleLogin,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _isFormValid && !_isLoading
+                        ? const Color(0xFF2c3e50)
+                        : const Color(0xFFbdc3c7),
+                    foregroundColor: _isFormValid && !_isLoading
+                        ? Colors.white
+                        : const Color(0xFF7f8c8d),
+                    padding: const EdgeInsets.symmetric(vertical: 18),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    elevation: 0,
+                    shadowColor: Colors.transparent,
+                  ),
+                  child: _isLoading
+                      ? Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const SizedBox(
+                              height: 18,
+                              width: 18,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  Colors.white,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Text(
+                              '登录中...',
+                              style: GoogleFonts.poppins(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w500,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ],
+                        )
+                      : Text(
+                          '登录',
+                          style: GoogleFonts.poppins(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w500,
+                            letterSpacing: 1.0,
+                          ),
+                        ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
