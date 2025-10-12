@@ -31,12 +31,25 @@ class _HomeScreenState extends State<HomeScreen> {
   int _currentBottomNavIndex = 0;
   String _selectedTopTab = '首页';
   bool _isSearchMode = false;
+  
+  // 搜索相关状态
+  final TextEditingController _searchController = TextEditingController();
+  final FocusNode _searchFocusNode = FocusNode();
+  String _searchQuery = '';
+  Function(String)? _performSearchCallback;
 
   @override
   void initState() {
     super.initState();
     // 进入首页时直接刷新播放记录和收藏夹缓存
     _refreshCacheOnHomeEnter();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    _searchFocusNode.dispose();
+    super.dispose();
   }
 
   /// 进入首页时刷新缓存
@@ -273,6 +286,26 @@ class _HomeScreenState extends State<HomeScreen> {
       isSearchMode: _isSearchMode,
       onSearchModeChanged: _onSearchModeChanged,
       onHomeTap: _onHomeTap,
+      searchController: _searchController,
+      searchFocusNode: _searchFocusNode,
+      searchQuery: _searchQuery,
+      onSearchQueryChanged: (value) {
+        setState(() {
+          _searchQuery = value;
+        });
+      },
+      onSearchSubmitted: (value) {
+        // 调用 SearchScreen 的搜索方法
+        _performSearchCallback?.call(value);
+      },
+      onClearSearch: () {
+        setState(() {
+          _searchQuery = '';
+          _searchController.clear();
+        });
+        // 触发 SearchScreen 的清空逻辑
+        // 通过设置空字符串来触发
+      },
     );
   }
 
@@ -326,6 +359,18 @@ class _HomeScreenState extends State<HomeScreen> {
   void _onSearchModeChanged(bool isSearchMode) {
     setState(() {
       _isSearchMode = isSearchMode;
+      if (isSearchMode) {
+        // 进入搜索模式时，聚焦搜索框
+        Future.delayed(const Duration(milliseconds: 100), () {
+          if (mounted) {
+            _searchFocusNode.requestFocus();
+          }
+        });
+      } else {
+        // 退出搜索模式时，清空搜索内容
+        _searchQuery = '';
+        _searchController.clear();
+      }
     });
   }
 
@@ -461,6 +506,17 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildSearchContent() {
     return SearchScreen(
       onVideoTap: _onSearchVideoTap,
+      searchController: _searchController,
+      searchFocusNode: _searchFocusNode,
+      onSearchQueryChanged: (value) {
+        setState(() {
+          _searchQuery = value;
+        });
+      },
+      onPerformSearch: (callback) {
+        // 保存 SearchScreen 的搜索回调
+        _performSearchCallback = callback;
+      },
     );
   }
 

@@ -15,6 +15,12 @@ class MainLayout extends StatefulWidget {
   final bool isSearchMode;
   final Function(bool)? onSearchModeChanged;
   final VoidCallback? onHomeTap;
+  final TextEditingController? searchController;
+  final FocusNode? searchFocusNode;
+  final String? searchQuery;
+  final Function(String)? onSearchQueryChanged;
+  final Function(String)? onSearchSubmitted;
+  final VoidCallback? onClearSearch;
 
   const MainLayout({
     super.key,
@@ -26,6 +32,12 @@ class MainLayout extends StatefulWidget {
     this.isSearchMode = false,
     this.onSearchModeChanged,
     this.onHomeTap,
+    this.searchController,
+    this.searchFocusNode,
+    this.searchQuery,
+    this.onSearchQueryChanged,
+    this.onSearchSubmitted,
+    this.onClearSearch,
   });
 
   @override
@@ -41,7 +53,9 @@ class _MainLayoutState extends State<MainLayout> {
     return Consumer<ThemeService>(
       builder: (context, themeService, child) {
         return Theme(
-          data: themeService.isDarkMode ? themeService.darkTheme : themeService.lightTheme,
+          data: themeService.isDarkMode
+              ? themeService.darkTheme
+              : themeService.lightTheme,
           child: Scaffold(
             resizeToAvoidBottomInset: !widget.isSearchMode,
             body: Stack(
@@ -53,10 +67,10 @@ class _MainLayoutState extends State<MainLayout> {
                     Expanded(
                       child: Container(
                         decoration: BoxDecoration(
-                          color: themeService.isDarkMode 
+                          color: themeService.isDarkMode
                               ? const Color(0xFF000000) // 深色模式纯黑色
                               : null,
-                          gradient: themeService.isDarkMode 
+                          gradient: themeService.isDarkMode
                               ? null
                               : const LinearGradient(
                                   begin: Alignment.topCenter,
@@ -107,6 +121,8 @@ class _MainLayoutState extends State<MainLayout> {
   }
 
   Widget _buildHeader(BuildContext context, ThemeService themeService) {
+    final isTablet = DeviceUtils.isTablet(context);
+
     return Container(
       padding: EdgeInsets.only(
         top: MediaQuery.of(context).padding.top + 8,
@@ -115,38 +131,53 @@ class _MainLayoutState extends State<MainLayout> {
         bottom: 8,
       ),
       decoration: BoxDecoration(
-        color: themeService.isDarkMode 
-            ? const Color(0xFF1e1e1e).withOpacity(0.9)
-            : Colors.white.withOpacity(0.8),
-        border: Border(
-          bottom: BorderSide(
-            color: themeService.isDarkMode 
-                ? const Color(0xFF333333).withOpacity(0.3)
-                : Colors.white.withOpacity(0.2),
-            width: 1,
-          ),
-        ),
+        color: widget.isSearchMode
+            ? themeService.isDarkMode
+                ? const Color(0xFF121212)
+                : const Color(0xFFf5f5f5)
+            : themeService.isDarkMode
+                ? const Color(0xFF1e1e1e).withOpacity(0.9)
+                : Colors.white.withOpacity(0.8),
+        border: widget.isSearchMode
+            ? null
+            : Border(
+                bottom: BorderSide(
+                  color: themeService.isDarkMode
+                      ? const Color(0xFF333333).withOpacity(0.3)
+                      : Colors.white.withOpacity(0.2),
+                  width: 1,
+                ),
+              ),
       ),
+      child: widget.isSearchMode
+          ? _buildSearchHeader(context, themeService, isTablet)
+          : _buildNormalHeader(context, themeService),
+    );
+  }
+
+  Widget _buildNormalHeader(BuildContext context, ThemeService themeService) {
+    return SizedBox(
+      height: 40, // 固定高度，与搜索框高度一致
       child: Stack(
         children: [
           // 左侧搜索图标
           Positioned(
             left: 0,
-            top: 0,
+            top: 4,
             child: GestureDetector(
               onTap: () {
                 // 防止重复点击
                 if (_isSearchButtonPressed) return;
-                
+
                 setState(() {
                   _isSearchButtonPressed = true;
                 });
-                
+
                 final callback = widget.onSearchModeChanged;
                 if (callback != null) {
                   callback(!widget.isSearchMode);
                 }
-                
+
                 // 延迟重置按钮状态，防止快速重复点击
                 Future.delayed(const Duration(milliseconds: 300), () {
                   if (mounted) {
@@ -156,18 +187,16 @@ class _MainLayoutState extends State<MainLayout> {
                   }
                 });
               },
-              behavior: HitTestBehavior.opaque, // 确保整个区域都可以点击
-              child: Container(
+              behavior: HitTestBehavior.opaque,
+              child: SizedBox(
                 width: 32,
                 height: 32,
                 child: Center(
                   child: Icon(
                     LucideIcons.search,
-                    color: widget.isSearchMode 
-                        ? const Color(0xFF27ae60) // 搜索模式时绿色
-                        : themeService.isDarkMode 
-                            ? const Color(0xFFffffff) // 非搜索模式深色主题白色
-                            : const Color(0xFF2c3e50), // 非搜索模式浅色主题深灰色
+                    color: themeService.isDarkMode
+                        ? const Color(0xFFffffff)
+                        : const Color(0xFF2c3e50),
                     size: 24,
                     weight: 1.0,
                   ),
@@ -185,7 +214,7 @@ class _MainLayoutState extends State<MainLayout> {
                 style: GoogleFonts.sourceCodePro(
                   fontSize: 24,
                   fontWeight: FontWeight.w400,
-                  color: themeService.isDarkMode 
+                  color: themeService.isDarkMode
                       ? Colors.white
                       : const Color(0xFF2c3e50),
                   letterSpacing: 1.5,
@@ -196,87 +225,269 @@ class _MainLayoutState extends State<MainLayout> {
           // 右侧按钮组
           Positioned(
             right: 0,
-            top: 0,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // 深浅模式切换按钮
-                Container(
-                  width: 32,
-                  height: 32,
-                  child: Material(
-                    color: Colors.transparent,
-                    child: Ink(
-                      decoration: const BoxDecoration(
-                        shape: BoxShape.circle,
+            top: 4,
+            child: _buildRightButtons(themeService),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSearchHeader(
+      BuildContext context, ThemeService themeService, bool isTablet) {
+    final searchBoxWidget = Container(
+      decoration: BoxDecoration(
+        color: themeService.isDarkMode ? const Color(0xFF1e1e1e) : Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: themeService.isDarkMode
+                ? Colors.black.withOpacity(0.3)
+                : Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: TextField(
+        controller: widget.searchController,
+        focusNode: widget.searchFocusNode,
+        autofocus: false,
+        textInputAction: TextInputAction.search,
+        keyboardType: TextInputType.text,
+        textAlignVertical: TextAlignVertical.center,
+        decoration: InputDecoration(
+          hintText: '搜索电影、剧集、动漫...',
+          hintStyle: GoogleFonts.poppins(
+            color: themeService.isDarkMode
+                ? const Color(0xFF666666)
+                : const Color(0xFF95a5a6),
+            fontSize: 14,
+          ),
+          suffixIcon: isTablet
+              ? Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // 平板模式：使用 IconButton
+                    if (widget.searchQuery?.isNotEmpty ?? false)
+                      IconButton(
+                        icon: Icon(
+                          LucideIcons.x,
+                          color: themeService.isDarkMode
+                              ? const Color(0xFFb0b0b0)
+                              : const Color(0xFF7f8c8d),
+                          size: 18,
+                        ),
+                        onPressed: widget.onClearSearch,
                       ),
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(24),
-                        onTap: () {
-                          themeService.toggleTheme(context);
-                        },
-                        child: Center(
-                          child: AnimatedSwitcher(
-                            duration: const Duration(milliseconds: 300),
-                            transitionBuilder: (Widget child, Animation<double> animation) {
-                              return ScaleTransition(
-                                scale: animation,
-                                child: child,
-                              );
-                            },
+                    IconButton(
+                      padding: const EdgeInsets.only(left: 2.0, right: 8.0),
+                      constraints: const BoxConstraints(),
+                      icon: Icon(
+                        LucideIcons.search,
+                        color: (widget.searchQuery?.trim().isNotEmpty ?? false)
+                            ? const Color(0xFF27ae60)
+                            : themeService.isDarkMode
+                                ? const Color(0xFFb0b0b0)
+                                : const Color(0xFF7f8c8d),
+                        size: 18,
+                      ),
+                      onPressed:
+                          (widget.searchQuery?.trim().isNotEmpty ?? false)
+                              ? () => widget.onSearchSubmitted
+                                  ?.call(widget.searchQuery!)
+                              : null,
+                    ),
+                  ],
+                )
+              : Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // 非平板模式：紧凑样式，无点击效果
+                    if (widget.searchQuery?.isNotEmpty ?? false)
+                      Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(16),
+                          onTap: widget.onClearSearch,
+                          splashColor: Colors.transparent,
+                          highlightColor: Colors.transparent,
+                          child: Padding(
+                            padding: const EdgeInsets.all(8.0),
                             child: Icon(
-                              themeService.isDarkMode ? LucideIcons.sun : LucideIcons.moon,
-                              key: ValueKey(themeService.isDarkMode),
-                              color: themeService.isDarkMode 
-                                  ? const Color(0xFFffffff)
-                                  : const Color(0xFF2c3e50),
-                              size: 24,
-                              weight: 1.0,
+                              LucideIcons.x,
+                              color: themeService.isDarkMode
+                                  ? const Color(0xFFb0b0b0)
+                                  : const Color(0xFF7f8c8d),
+                              size: 16,
                             ),
                           ),
                         ),
                       ),
-                    ),
-                  ),
-                ),
-                // 按钮间距
-                const SizedBox(width: 12),
-                // 用户按钮
-                Container(
-                  width: 32,
-                  height: 32,
-                  child: Material(
-                    color: Colors.transparent,
-                    child: Ink(
-                      decoration: const BoxDecoration(
-                        shape: BoxShape.circle,
-                      ),
+                    Material(
+                      color: Colors.transparent,
                       child: InkWell(
-                        borderRadius: BorderRadius.circular(24),
-                        onTap: () {
-                          setState(() {
-                            _showUserMenu = true;
-                          });
-                        },
-                        child: Center(
+                        borderRadius: BorderRadius.circular(16),
+                        onTap: (widget.searchQuery?.trim().isNotEmpty ?? false)
+                            ? () => widget.onSearchSubmitted
+                                ?.call(widget.searchQuery!)
+                            : null,
+                        splashColor: Colors.transparent,
+                        highlightColor: Colors.transparent,
+                        child: Padding(
+                          padding: const EdgeInsets.only(
+                              left: 4.0, right: 12.0, top: 8.0, bottom: 8.0),
                           child: Icon(
-                            LucideIcons.user,
-                            color: themeService.isDarkMode 
-                                ? const Color(0xFFffffff)
-                                : const Color(0xFF2c3e50),
-                            size: 24,
-                            weight: 1.0,
+                            LucideIcons.search,
+                            color:
+                                (widget.searchQuery?.trim().isNotEmpty ?? false)
+                                    ? const Color(0xFF27ae60)
+                                    : themeService.isDarkMode
+                                        ? const Color(0xFFb0b0b0)
+                                        : const Color(0xFF7f8c8d),
+                            size: 16,
                           ),
                         ),
                       ),
                     ),
-                  ),
+                  ],
                 ),
-              ],
-            ),
+          border: InputBorder.none,
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 6,
           ),
+          isDense: true,
+        ),
+        style: GoogleFonts.poppins(
+          fontSize: 14,
+          color: themeService.isDarkMode
+              ? const Color(0xFFffffff)
+              : const Color(0xFF2c3e50),
+          height: 1.2,
+        ),
+        onSubmitted: widget.onSearchSubmitted,
+        onChanged: widget.onSearchQueryChanged,
+      ),
+    );
+
+    // 平板模式下居中
+    if (isTablet) {
+      return SizedBox(
+        height: 40, // 固定高度
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            // 搜索框在整个屏幕水平居中
+            Center(
+              child: SizedBox(
+                width: MediaQuery.of(context).size.width * 0.5,
+                child: searchBoxWidget,
+              ),
+            ),
+            // 右侧按钮 - 垂直居中
+            Positioned(
+              right: 0,
+              child: _buildRightButtons(themeService),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // 非平板模式下，搜索框居左，右侧留出按钮空间
+    return SizedBox(
+      height: 40, // 固定高度
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Expanded(child: searchBoxWidget),
+          const SizedBox(width: 16),
+          _buildRightButtons(themeService),
         ],
       ),
+    );
+  }
+
+  Widget _buildRightButtons(ThemeService themeService) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // 深浅模式切换按钮
+        SizedBox(
+          width: 32,
+          height: 32,
+          child: Material(
+            color: Colors.transparent,
+            child: Ink(
+              decoration: const BoxDecoration(
+                shape: BoxShape.circle,
+              ),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(24),
+                onTap: () {
+                  themeService.toggleTheme(context);
+                },
+                child: Center(
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 300),
+                    transitionBuilder:
+                        (Widget child, Animation<double> animation) {
+                      return ScaleTransition(
+                        scale: animation,
+                        child: child,
+                      );
+                    },
+                    child: Icon(
+                      themeService.isDarkMode
+                          ? LucideIcons.sun
+                          : LucideIcons.moon,
+                      key: ValueKey(themeService.isDarkMode),
+                      color: themeService.isDarkMode
+                          ? const Color(0xFFffffff)
+                          : const Color(0xFF2c3e50),
+                      size: 24,
+                      weight: 1.0,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        // 用户按钮
+        SizedBox(
+          width: 32,
+          height: 32,
+          child: Material(
+            color: Colors.transparent,
+            child: Ink(
+              decoration: const BoxDecoration(
+                shape: BoxShape.circle,
+              ),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(24),
+                onTap: () {
+                  setState(() {
+                    _showUserMenu = true;
+                  });
+                },
+                child: Center(
+                  child: Icon(
+                    LucideIcons.user,
+                    color: themeService.isDarkMode
+                        ? const Color(0xFFffffff)
+                        : const Color(0xFF2c3e50),
+                    size: 24,
+                    weight: 1.0,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -293,12 +504,12 @@ class _MainLayoutState extends State<MainLayout> {
 
     return Container(
       decoration: BoxDecoration(
-        color: themeService.isDarkMode 
+        color: themeService.isDarkMode
             ? const Color(0xFF1e1e1e).withOpacity(0.9)
             : Colors.white.withOpacity(0.9),
         border: Border(
           top: BorderSide(
-            color: themeService.isDarkMode 
+            color: themeService.isDarkMode
                 ? const Color(0xFF333333).withOpacity(0.3)
                 : Colors.white.withOpacity(0.2),
             width: 1,
@@ -312,17 +523,19 @@ class _MainLayoutState extends State<MainLayout> {
         bottom: MediaQuery.of(context).padding.bottom + 8, // 手动处理底部安全区域
       ),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisAlignment:
+            isTablet ? MainAxisAlignment.center : MainAxisAlignment.spaceEvenly,
         children: [
           // 平板模式下添加左侧空白
           if (isTablet) const Spacer(flex: 3),
-          
+
           // 导航按钮
           ...navItems.asMap().entries.expand((entry) {
             int index = entry.key;
             Map<String, dynamic> item = entry.value;
-            bool isSelected = !widget.isSearchMode && widget.currentBottomNavIndex == index;
-            
+            bool isSelected =
+                !widget.isSearchMode && widget.currentBottomNavIndex == index;
+
             return [
               GestureDetector(
                 onTap: () {
@@ -339,9 +552,9 @@ class _MainLayoutState extends State<MainLayout> {
                     children: [
                       Icon(
                         item['icon'],
-                        color: isSelected 
-                            ? const Color(0xFF27ae60) 
-                            : themeService.isDarkMode 
+                        color: isSelected
+                            ? const Color(0xFF27ae60)
+                            : themeService.isDarkMode
                                 ? const Color(0xFFb0b0b0)
                                 : const Color(0xFF7f8c8d),
                         size: 24,
@@ -351,10 +564,11 @@ class _MainLayoutState extends State<MainLayout> {
                         item['label'],
                         style: GoogleFonts.poppins(
                           fontSize: 12,
-                          fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
-                          color: isSelected 
-                              ? const Color(0xFF27ae60) 
-                              : themeService.isDarkMode 
+                          fontWeight:
+                              isSelected ? FontWeight.w600 : FontWeight.w400,
+                          color: isSelected
+                              ? const Color(0xFF27ae60)
+                              : themeService.isDarkMode
                                   ? const Color(0xFFb0b0b0)
                                   : const Color(0xFF7f8c8d),
                         ),
@@ -368,7 +582,7 @@ class _MainLayoutState extends State<MainLayout> {
                 const SizedBox(width: 36),
             ];
           }),
-          
+
           // 平板模式下添加右侧空白
           if (isTablet) const Spacer(flex: 3),
         ],
@@ -376,4 +590,3 @@ class _MainLayoutState extends State<MainLayout> {
     );
   }
 }
-
