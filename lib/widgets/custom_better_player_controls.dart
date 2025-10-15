@@ -647,6 +647,7 @@ class _CustomBetterPlayerControlsState
                       });
                     },
                     dragPosition: _dragPosition,
+                    isSeekingViaSwipe: _isSeekingViaSwipe,
                   ),
                 ),
               ),
@@ -862,6 +863,7 @@ class CustomVideoProgressBar extends StatefulWidget {
   final VoidCallback? onDragUpdate;
   final Function(Duration)? onPositionUpdate;
   final Duration? dragPosition;
+  final bool isSeekingViaSwipe;
 
   const CustomVideoProgressBar({
     super.key,
@@ -871,6 +873,7 @@ class CustomVideoProgressBar extends StatefulWidget {
     this.onDragUpdate,
     this.onPositionUpdate,
     this.dragPosition,
+    this.isSeekingViaSwipe = false,
   });
 
   @override
@@ -1008,19 +1011,23 @@ class _CustomVideoProgressBarState extends State<CustomVideoProgressBar> {
                   Positioned(
                     left: thumbPosition - 8,
                     top: 4,
-                    child: Container(
-                      width: 16,
-                      height: 16,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: Colors.red,
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.3),
-                            blurRadius: 4,
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
+                    child: AnimatedScale(
+                      scale: widget.isSeekingViaSwipe ? 1.25 : 1.0,
+                      duration: const Duration(milliseconds: 150),
+                      child: Container(
+                        width: 16,
+                        height: 16,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Colors.red,
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.3),
+                              blurRadius: 4,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),

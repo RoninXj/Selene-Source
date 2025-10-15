@@ -13,6 +13,7 @@ import '../widgets/custom_switch.dart';
 import '../widgets/favorites_grid.dart';
 import '../widgets/search_result_agg_grid.dart';
 import '../widgets/search_results_grid.dart';
+import '../utils/device_utils.dart';
 import 'player_screen.dart';
 
 class SelectorOption {
@@ -71,6 +72,13 @@ class _SearchScreenState extends State<SearchScreen>
   String? _deletingHistoryItem;
   AnimationController? _deleteAnimationController;
   Animation<double>? _deleteAnimation;
+
+  // hover 状态
+  String? _hoveredHistoryItem;
+  String? _hoveredDeleteButton;
+  bool _isAggregationToggleHovered = false;
+  String? _hoveredFilterPill;
+  bool _isYearSortHovered = false;
 
   late SSESearchService _searchService;
   StreamSubscription<List<SearchResult>>? _incrementalResultsSubscription;
@@ -162,15 +170,17 @@ class _SearchScreenState extends State<SearchScreen>
   void _onControllerChanged() {
     // 当文本被外部清空时（例如点击 X 按钮），重置搜索状态
     if (_searchController.text.isEmpty && _hasSearched) {
-      setState(() {
-        _searchQuery = '';
-        _hasSearched = false;
-        _hasReceivedStart = false;
-        _searchResults.clear();
-        _searchError = null;
-        _searchProgress = null;
-        _searchService.stopSearch();
-      });
+      if (mounted) {
+        setState(() {
+          _searchQuery = '';
+          _hasSearched = false;
+          _hasReceivedStart = false;
+          _searchResults.clear();
+          _searchError = null;
+          _searchProgress = null;
+          _searchService.stopSearch();
+        });
+      }
     }
   }
 
@@ -669,114 +679,195 @@ class _SearchScreenState extends State<SearchScreen>
             runSpacing: 8,
             children: _searchHistory.map((history) {
               final isDeleting = _deletingHistoryItem == history;
+              final isHovered = _hoveredHistoryItem == history;
 
-              return GestureDetector(
-                onTap: () {
-                  if (!isDeleting) {
-                    _searchController.text = history;
-                    setState(() {
-                      _searchQuery = history;
-                    });
-                    // 通知外部状态变化
-                    widget.onSearchQueryChanged?.call(history);
-                    _performSearch(history);
-                  }
-                },
-                onLongPressStart: (_) {
-                  if (!isDeleting) {
-                    _startDeleteAnimation(history);
-                  }
-                },
-                onLongPressEnd: (_) {
-                  if (isDeleting) {
-                    _cancelDeleteAnimation();
-                  }
-                },
-                child: AnimatedBuilder(
-                  animation:
-                      _deleteAnimation ?? const AlwaysStoppedAnimation(0.0),
-                  builder: (context, child) {
-                    // 计算颜色插值
-                    Color backgroundColor;
-                    Color textColor;
-                    Color borderColor;
-
-                    if (isDeleting) {
-                      final animationValue = _deleteAnimation?.value ?? 0.0;
-
-                      // 背景色从正常色渐变到红色
-                      backgroundColor = Color.lerp(
-                        themeService.isDarkMode
-                            ? const Color(0xFF1e1e1e)
-                            : Colors.white,
-                        const Color(0xFFe74c3c).withOpacity(0.2),
-                        animationValue,
-                      )!;
-
-                      // 文字色从正常色渐变到红色
-                      textColor = Color.lerp(
-                        themeService.isDarkMode
-                            ? const Color(0xFFffffff)
-                            : const Color(0xFF2c3e50),
-                        const Color(0xFFe74c3c),
-                        animationValue,
-                      )!;
-
-                      // 边框色从正常色渐变到红色
-                      borderColor = Color.lerp(
-                        themeService.isDarkMode
-                            ? const Color(0xFF333333)
-                            : const Color(0xFFe9ecef),
-                        const Color(0xFFe74c3c),
-                        animationValue,
-                      )!;
-                    } else {
-                      backgroundColor = themeService.isDarkMode
-                          ? const Color(0xFF1e1e1e)
-                          : Colors.white;
-                      textColor = themeService.isDarkMode
-                          ? const Color(0xFFffffff)
-                          : const Color(0xFF2c3e50);
-                      borderColor = themeService.isDarkMode
-                          ? const Color(0xFF333333)
-                          : const Color(0xFFe9ecef);
+              return MouseRegion(
+                cursor: DeviceUtils.isPC()
+                    ? SystemMouseCursors.click
+                    : MouseCursor.defer,
+                onEnter: DeviceUtils.isPC()
+                    ? (_) {
+                        setState(() {
+                          _hoveredHistoryItem = history;
+                        });
+                      }
+                    : null,
+                onExit: DeviceUtils.isPC()
+                    ? (_) {
+                        // 只有当前 hover 的是这个历史项时才清除
+                        if (_hoveredHistoryItem == history) {
+                          setState(() {
+                            _hoveredHistoryItem = null;
+                          });
+                        }
+                      }
+                    : null,
+                child: GestureDetector(
+                  onTap: () {
+                    if (!isDeleting) {
+                      _searchController.text = history;
+                      setState(() {
+                        _searchQuery = history;
+                      });
+                      // 通知外部状态变化
+                      widget.onSearchQueryChanged?.call(history);
+                      _performSearch(history);
                     }
+                  },
+                  onLongPressStart: (_) {
+                    if (!isDeleting) {
+                      _startDeleteAnimation(history);
+                    }
+                  },
+                  onLongPressEnd: (_) {
+                    if (isDeleting) {
+                      _cancelDeleteAnimation();
+                    }
+                  },
+                  child: AnimatedBuilder(
+                    animation:
+                        _deleteAnimation ?? const AlwaysStoppedAnimation(0.0),
+                    builder: (context, child) {
+                      // 计算颜色插值
+                      Color backgroundColor;
+                      Color textColor;
+                      Color borderColor;
 
-                    return Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 8,
-                      ),
-                      decoration: BoxDecoration(
-                        color: backgroundColor,
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(
-                          color: borderColor,
-                          width: 1,
-                        ),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
+                      if (isDeleting) {
+                        final animationValue = _deleteAnimation?.value ?? 0.0;
+
+                        // 背景色从正常色渐变到红色
+                        backgroundColor = Color.lerp(
+                          themeService.isDarkMode
+                              ? const Color(0xFF1e1e1e)
+                              : Colors.white,
+                          const Color(0xFFe74c3c).withOpacity(0.2),
+                          animationValue,
+                        )!;
+
+                        // 文字色从正常色渐变到红色
+                        textColor = Color.lerp(
+                          themeService.isDarkMode
+                              ? const Color(0xFFffffff)
+                              : const Color(0xFF2c3e50),
+                          const Color(0xFFe74c3c),
+                          animationValue,
+                        )!;
+
+                        // 边框色从正常色渐变到红色
+                        borderColor = Color.lerp(
+                          themeService.isDarkMode
+                              ? const Color(0xFF333333)
+                              : const Color(0xFFe9ecef),
+                          const Color(0xFFe74c3c),
+                          animationValue,
+                        )!;
+                      } else if (DeviceUtils.isPC() && isHovered) {
+                        // PC 端 hover 效果 - 浅绿色
+                        backgroundColor = themeService.isDarkMode
+                            ? const Color(0xFF1e3a28) // 深色模式下的深绿背景
+                            : const Color(0xFFe8f5e9); // 浅色模式下的浅绿背景
+                        textColor = const Color(0xFF27ae60); // 绿色文字
+                        borderColor = const Color(0xFF52c77a); // 浅绿边框
+                      } else {
+                        backgroundColor = themeService.isDarkMode
+                            ? const Color(0xFF1e1e1e)
+                            : Colors.white;
+                        textColor = themeService.isDarkMode
+                            ? const Color(0xFFffffff)
+                            : const Color(0xFF2c3e50);
+                        borderColor = themeService.isDarkMode
+                            ? const Color(0xFF333333)
+                            : const Color(0xFFe9ecef);
+                      }
+
+                      return Stack(
+                        clipBehavior: Clip.none, // 允许子组件超出边界
                         children: [
-                          Text(
-                            history,
-                            style: GoogleFonts.poppins(
-                              fontSize: 14,
-                              color: textColor,
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 8,
+                            ),
+                            decoration: BoxDecoration(
+                              color: backgroundColor,
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(
+                                color: borderColor,
+                                width: 1,
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  history,
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 14,
+                                    color: textColor,
+                                  ),
+                                ),
+                                if (isDeleting) ...[
+                                  const SizedBox(width: 8),
+                                  Icon(
+                                    Icons.delete_outline,
+                                    size: 16,
+                                    color: textColor,
+                                  ),
+                                ],
+                              ],
                             ),
                           ),
-                          if (isDeleting) ...[
-                            const SizedBox(width: 8),
-                            Icon(
-                              Icons.delete_outline,
-                              size: 16,
-                              color: textColor,
+                          // PC 端 hover 时显示的删除按钮
+                          if (DeviceUtils.isPC() && isHovered && !isDeleting)
+                            Positioned(
+                              top: -6,
+                              right: -6,
+                              child: MouseRegion(
+                                cursor: SystemMouseCursors.click,
+                                onEnter: (_) {
+                                  setState(() {
+                                    _hoveredDeleteButton = history;
+                                  });
+                                },
+                                onExit: (_) {
+                                  setState(() {
+                                    _hoveredDeleteButton = null;
+                                  });
+                                },
+                                child: GestureDetector(
+                                  onTap: () {
+                                    _deleteSearchHistory(history);
+                                  },
+                                  child: Container(
+                                    width: 18,
+                                    height: 18,
+                                    decoration: BoxDecoration(
+                                      color: _hoveredDeleteButton == history
+                                          ? const Color(0xFFe74c3c) // hover 时红色
+                                          : const Color(0xFF95a5a6), // 默认灰色
+                                      shape: BoxShape.circle,
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.black.withOpacity(0.2),
+                                          blurRadius: 2,
+                                          offset: const Offset(0, 1),
+                                        ),
+                                      ],
+                                    ),
+                                    child: const Icon(
+                                      Icons.close,
+                                      size: 12,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ),
+                              ),
                             ),
-                          ],
                         ],
-                      ),
-                    );
-                  },
+                      );
+                    },
+                  ),
                 ),
               );
             }).toList(),
@@ -908,21 +999,40 @@ class _SearchScreenState extends State<SearchScreen>
                       ),
                     ),
                     const SizedBox(width: 6),
-                    Transform.translate(
-                      offset: const Offset(0, 1.0),
-                      child: CustomSwitch(
-                        value: _useAggregatedView,
-                        onChanged: (value) {
-                          setState(() {
-                            _useAggregatedView = value;
-                          });
-                        },
-                        activeColor: const Color(0xFF27ae60),
-                        inactiveColor: themeService.isDarkMode
-                            ? const Color(0xFF444444)
-                            : const Color(0xFFcccccc),
-                        width: 32,
-                        height: 16,
+                    MouseRegion(
+                      cursor: DeviceUtils.isPC()
+                          ? SystemMouseCursors.click
+                          : MouseCursor.defer,
+                      onEnter: DeviceUtils.isPC()
+                          ? (_) {
+                              setState(() {
+                                _isAggregationToggleHovered = true;
+                              });
+                            }
+                          : null,
+                      onExit: DeviceUtils.isPC()
+                          ? (_) {
+                              setState(() {
+                                _isAggregationToggleHovered = false;
+                              });
+                            }
+                          : null,
+                      child: Transform.translate(
+                        offset: const Offset(0, 1.0),
+                        child: CustomSwitch(
+                          value: _useAggregatedView,
+                          onChanged: (value) {
+                            setState(() {
+                              _useAggregatedView = value;
+                            });
+                          },
+                          activeColor: const Color(0xFF27ae60),
+                          inactiveColor: themeService.isDarkMode
+                              ? const Color(0xFF444444)
+                              : const Color(0xFFcccccc),
+                          width: 32,
+                          height: 16,
+                        ),
                       ),
                     ),
                   ],
@@ -1346,38 +1456,60 @@ class _SearchScreenState extends State<SearchScreen>
       String selectedValue, ValueChanged<String> onSelected,
       {bool isFirst = false}) {
     bool isDefault = selectedValue == 'all';
+    bool isHovered = _hoveredFilterPill == title;
 
-    return GestureDetector(
-      onTap: () {
-        _showFilterOptions(context, title, options, selectedValue, onSelected);
-      },
-      child: Container(
-        padding: EdgeInsets.fromLTRB(isFirst ? 0 : 8, 6, 8, 6),
-        decoration: BoxDecoration(
-          color: Colors.transparent,
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Row(
-          children: [
-            Text(
-              title, // 始终显示原始标题，不显示选中内容
-              style: GoogleFonts.poppins(
-                fontSize: 13,
-                color: isDefault
-                    ? Theme.of(context).textTheme.bodySmall?.color
-                    : const Color(0xFF27AE60),
-                fontWeight: isDefault ? FontWeight.normal : FontWeight.w500,
+    return MouseRegion(
+      cursor: DeviceUtils.isPC()
+          ? SystemMouseCursors.click
+          : MouseCursor.defer,
+      onEnter: DeviceUtils.isPC()
+          ? (_) {
+              setState(() {
+                _hoveredFilterPill = title;
+              });
+            }
+          : null,
+      onExit: DeviceUtils.isPC()
+          ? (_) {
+              setState(() {
+                _hoveredFilterPill = null;
+              });
+            }
+          : null,
+      child: GestureDetector(
+        onTap: () {
+          _showFilterOptions(context, title, options, selectedValue, onSelected);
+        },
+        child: Container(
+          padding: EdgeInsets.fromLTRB(isFirst ? 0 : 8, 6, 8, 6),
+          decoration: BoxDecoration(
+            color: Colors.transparent,
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Row(
+            children: [
+              Text(
+                title, // 始终显示原始标题，不显示选中内容
+                style: GoogleFonts.poppins(
+                  fontSize: 13,
+                  color: (DeviceUtils.isPC() && isHovered) || !isDefault
+                      ? const Color(0xFF27AE60)
+                      : Theme.of(context).textTheme.bodySmall?.color,
+                  fontWeight: (DeviceUtils.isPC() && isHovered) || !isDefault
+                      ? FontWeight.w500
+                      : FontWeight.normal,
+                ),
               ),
-            ),
-            const SizedBox(width: 4),
-            Icon(
-              Icons.arrow_drop_down,
-              size: 18,
-              color: isDefault
-                  ? Theme.of(context).textTheme.bodySmall?.color
-                  : const Color(0xFF27AE60),
-            ),
-          ],
+              const SizedBox(width: 4),
+              Icon(
+                Icons.arrow_drop_down,
+                size: 18,
+                color: (DeviceUtils.isPC() && isHovered) || !isDefault
+                    ? const Color(0xFF27AE60)
+                    : Theme.of(context).textTheme.bodySmall?.color,
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -1500,45 +1632,66 @@ class _SearchScreenState extends State<SearchScreen>
 
     bool isDefault = _yearSortOrder == SortOrder.none;
 
-    return GestureDetector(
-      onTap: () {
-        setState(() {
-          if (_yearSortOrder == SortOrder.none) {
-            _yearSortOrder = SortOrder.desc;
-          } else if (_yearSortOrder == SortOrder.desc) {
-            _yearSortOrder = SortOrder.asc;
-          } else {
-            _yearSortOrder = SortOrder.none;
-          }
-        });
-      },
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-        decoration: BoxDecoration(
-          color: Colors.transparent,
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Row(
-          children: [
-            Text(
-              text,
-              style: GoogleFonts.poppins(
-                fontSize: 13,
-                color: isDefault
-                    ? Theme.of(context).textTheme.bodySmall?.color
-                    : const Color(0xFF27AE60),
-                fontWeight: isDefault ? FontWeight.normal : FontWeight.w500,
+    return MouseRegion(
+      cursor: DeviceUtils.isPC()
+          ? SystemMouseCursors.click
+          : MouseCursor.defer,
+      onEnter: DeviceUtils.isPC()
+          ? (_) {
+              setState(() {
+                _isYearSortHovered = true;
+              });
+            }
+          : null,
+      onExit: DeviceUtils.isPC()
+          ? (_) {
+              setState(() {
+                _isYearSortHovered = false;
+              });
+            }
+          : null,
+      child: GestureDetector(
+        onTap: () {
+          setState(() {
+            if (_yearSortOrder == SortOrder.none) {
+              _yearSortOrder = SortOrder.desc;
+            } else if (_yearSortOrder == SortOrder.desc) {
+              _yearSortOrder = SortOrder.asc;
+            } else {
+              _yearSortOrder = SortOrder.none;
+            }
+          });
+        },
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          decoration: BoxDecoration(
+            color: Colors.transparent,
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Row(
+            children: [
+              Text(
+                text,
+                style: GoogleFonts.poppins(
+                  fontSize: 13,
+                  color: (DeviceUtils.isPC() && _isYearSortHovered) || !isDefault
+                      ? const Color(0xFF27AE60)
+                      : Theme.of(context).textTheme.bodySmall?.color,
+                  fontWeight: (DeviceUtils.isPC() && _isYearSortHovered) || !isDefault
+                      ? FontWeight.w500
+                      : FontWeight.normal,
+                ),
               ),
-            ),
-            const SizedBox(width: 4),
-            Icon(
-              icon,
-              size: 16,
-              color: isDefault
-                  ? Theme.of(context).textTheme.bodySmall?.color
-                  : const Color(0xFF27AE60),
-            ),
-          ],
+              const SizedBox(width: 4),
+              Icon(
+                icon,
+                size: 16,
+                color: (DeviceUtils.isPC() && _isYearSortHovered) || !isDefault
+                    ? const Color(0xFF27AE60)
+                    : Theme.of(context).textTheme.bodySmall?.color,
+              ),
+            ],
+          ),
         ),
       ),
     );

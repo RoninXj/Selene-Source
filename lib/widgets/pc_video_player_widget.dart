@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 import 'custom_media_kit_controls.dart';
+import 'dlna_device_dialog.dart';
 
 class PcVideoPlayerWidget extends StatefulWidget {
   final String? url;
@@ -106,6 +107,7 @@ class _PcVideoPlayerWidgetState extends State<PcVideoPlayerWidget>
   StreamSubscription? _positionSubscription;
   StreamSubscription? _playingSubscription;
   StreamSubscription? _completedSubscription;
+  bool _shouldShowDLNAAfterExitFullscreen = false; // 退出全屏后是否显示 DLNA 对话框
 
   @override
   void initState() {
@@ -136,6 +138,7 @@ class _PcVideoPlayerWidgetState extends State<PcVideoPlayerWidget>
 
     setState(() {
       _isInitialized = true;
+      _isLoadingVideo = false;
     });
 
     // 触发 ready 回调
@@ -209,17 +212,13 @@ class _PcVideoPlayerWidgetState extends State<PcVideoPlayerWidget>
           });
         }
       }
+      // 触发 ready 回调
+      widget.onReady?.call();
       return;
     }
 
     // 如果没有初始化则直接调用 _initializePlayer 执行初始化
     await _initializePlayer(startAt: startAt);
-    
-    if (mounted) {
-      setState(() {
-        _isLoadingVideo = false;
-      });
-    }
   }
 
   Future<void> seekTo(Duration position) async {
@@ -262,6 +261,23 @@ class _PcVideoPlayerWidgetState extends State<PcVideoPlayerWidget>
           ? Video(
               controller: _videoController!,
               controls: (state) {
+                // 检查是否需要在退出全屏后显示 DLNA 对话框
+                if (_shouldShowDLNAAfterExitFullscreen) {
+                  try {
+                    final isFullscreen = state.isFullscreen();
+                    if (!isFullscreen) {
+                      _shouldShowDLNAAfterExitFullscreen = false;
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        if (mounted) {
+                          _showDLNADialog(state);
+                        }
+                      });
+                    }
+                  } catch (e) {
+                    // 如果无法安全获取全屏状态，忽略错误
+                  }
+                }
+                
                 return CustomMediaKitControls(
                   state: state,
                   player: _player!,
@@ -277,6 +293,14 @@ class _PcVideoPlayerWidgetState extends State<PcVideoPlayerWidget>
                   currentEpisodeIndex: widget.currentEpisodeIndex,
                   totalEpisodes: widget.totalEpisodes,
                   sourceName: widget.sourceName,
+                  onDLNAButtonPressed: (isFullscreen) {
+                    if (isFullscreen) {
+                      // 如果在全屏状态，设置标记并退出全屏
+                      setState(() {
+                        _shouldShowDLNAAfterExitFullscreen = true;
+                      });
+                    }
+                  },
                 );
               },
             )
@@ -286,6 +310,27 @@ class _PcVideoPlayerWidgetState extends State<PcVideoPlayerWidget>
               ),
             ),
     );
+  }
+
+  Future<void> _showDLNADialog(VideoState state) async {
+    if (_player == null) return;
+    
+    final resumePos = _player!.state.position;
+    
+    if (mounted) {
+      await showDialog(
+        context: context,
+        builder: (context) => DLNADeviceDialog(
+          currentUrl: _currentUrl ?? '',
+          resumePosition: resumePos,
+          videoTitle: widget.videoTitle,
+          currentEpisodeIndex: widget.currentEpisodeIndex,
+          totalEpisodes: widget.totalEpisodes,
+          sourceName: widget.sourceName,
+          onCastStarted: widget.onCastStarted,
+        ),
+      );
+    }
   }
 
   @override

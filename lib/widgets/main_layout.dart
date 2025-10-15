@@ -47,6 +47,9 @@ class MainLayout extends StatefulWidget {
 class _MainLayoutState extends State<MainLayout> {
   bool _isSearchButtonPressed = false;
   bool _showUserMenu = false;
+  
+  // 用于跟踪底部导航栏按钮的 hover 状态
+  int? _hoveredNavIndex;
 
   @override
   Widget build(BuildContext context) {
@@ -169,41 +172,44 @@ class _MainLayoutState extends State<MainLayout> {
           Positioned(
             left: 0,
             top: 4,
-            child: GestureDetector(
-              onTap: () {
-                // 防止重复点击
-                if (_isSearchButtonPressed) return;
+            child: MouseRegion(
+              cursor: DeviceUtils.isPC() ? SystemMouseCursors.click : MouseCursor.defer,
+              child: GestureDetector(
+                onTap: () {
+                  // 防止重复点击
+                  if (_isSearchButtonPressed) return;
 
-                setState(() {
-                  _isSearchButtonPressed = true;
-                });
+                  setState(() {
+                    _isSearchButtonPressed = true;
+                  });
 
-                final callback = widget.onSearchModeChanged;
-                if (callback != null) {
-                  callback(!widget.isSearchMode);
-                }
-
-                // 延迟重置按钮状态，防止快速重复点击
-                Future.delayed(const Duration(milliseconds: 300), () {
-                  if (mounted) {
-                    setState(() {
-                      _isSearchButtonPressed = false;
-                    });
+                  final callback = widget.onSearchModeChanged;
+                  if (callback != null) {
+                    callback(!widget.isSearchMode);
                   }
-                });
-              },
-              behavior: HitTestBehavior.opaque,
-              child: SizedBox(
-                width: 32,
-                height: 32,
-                child: Center(
-                  child: Icon(
-                    LucideIcons.search,
-                    color: themeService.isDarkMode
-                        ? const Color(0xFFffffff)
-                        : const Color(0xFF2c3e50),
-                    size: 24,
-                    weight: 1.0,
+
+                  // 延迟重置按钮状态，防止快速重复点击
+                  Future.delayed(const Duration(milliseconds: 300), () {
+                    if (mounted) {
+                      setState(() {
+                        _isSearchButtonPressed = false;
+                      });
+                    }
+                  });
+                },
+                behavior: HitTestBehavior.opaque,
+                child: SizedBox(
+                  width: 32,
+                  height: 32,
+                  child: Center(
+                    child: Icon(
+                      LucideIcons.search,
+                      color: themeService.isDarkMode
+                          ? const Color(0xFFffffff)
+                          : const Color(0xFF2c3e50),
+                      size: 24,
+                      weight: 1.0,
+                    ),
                   ),
                 ),
               ),
@@ -540,45 +546,63 @@ class _MainLayoutState extends State<MainLayout> {
             Map<String, dynamic> item = entry.value;
             bool isSelected =
                 !widget.isSearchMode && widget.currentBottomNavIndex == index;
+            bool isHovered = DeviceUtils.isPC() && _hoveredNavIndex == index;
 
             return [
-              GestureDetector(
-                onTap: () {
-                  widget.onBottomNavChanged(index);
-                },
-                behavior: HitTestBehavior.opaque, // 确保整个区域都可以点击
-                child: Container(
-                  padding: EdgeInsets.symmetric(
-                    horizontal: isTablet ? 16 : 12,
-                    vertical: 8,
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        item['icon'],
-                        color: isSelected
-                            ? const Color(0xFF27ae60)
-                            : themeService.isDarkMode
-                                ? const Color(0xFFb0b0b0)
-                                : const Color(0xFF7f8c8d),
-                        size: 24,
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        item['label'],
-                        style: GoogleFonts.poppins(
-                          fontSize: 12,
-                          fontWeight:
-                              isSelected ? FontWeight.w600 : FontWeight.w400,
+              MouseRegion(
+                cursor: DeviceUtils.isPC() ? SystemMouseCursors.click : MouseCursor.defer,
+                onEnter: DeviceUtils.isPC() ? (_) {
+                  setState(() {
+                    _hoveredNavIndex = index;
+                  });
+                } : null,
+                onExit: DeviceUtils.isPC() ? (_) {
+                  setState(() {
+                    _hoveredNavIndex = null;
+                  });
+                } : null,
+                child: GestureDetector(
+                  onTap: () {
+                    widget.onBottomNavChanged(index);
+                  },
+                  behavior: HitTestBehavior.opaque, // 确保整个区域都可以点击
+                  child: Container(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: isTablet ? 16 : 12,
+                      vertical: 8,
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          item['icon'],
                           color: isSelected
                               ? const Color(0xFF27ae60)
-                              : themeService.isDarkMode
-                                  ? const Color(0xFFb0b0b0)
-                                  : const Color(0xFF7f8c8d),
+                              : isHovered
+                                  ? const Color(0xFF52c77a) // hover 时的浅绿色
+                                  : themeService.isDarkMode
+                                      ? const Color(0xFFb0b0b0)
+                                      : const Color(0xFF7f8c8d),
+                          size: 24,
                         ),
-                      ),
-                    ],
+                        const SizedBox(height: 4),
+                        Text(
+                          item['label'],
+                          style: GoogleFonts.poppins(
+                            fontSize: 12,
+                            fontWeight:
+                                isSelected ? FontWeight.w600 : FontWeight.w400,
+                            color: isSelected
+                                ? const Color(0xFF27ae60)
+                                : isHovered
+                                    ? const Color(0xFF52c77a) // hover 时的浅绿色
+                                    : themeService.isDarkMode
+                                        ? const Color(0xFFb0b0b0)
+                                        : const Color(0xFF7f8c8d),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),

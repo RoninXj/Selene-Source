@@ -5,6 +5,50 @@ import 'package:media_kit_video/media_kit_video.dart';
 import 'pc_video_player_widget.dart';
 import 'dlna_device_dialog.dart';
 
+// 带 hover 效果的按钮组件
+class HoverButton extends StatefulWidget {
+  final Widget child;
+  final VoidCallback onTap;
+  final EdgeInsets padding;
+
+  const HoverButton({
+    super.key,
+    required this.child,
+    required this.onTap,
+    this.padding = const EdgeInsets.all(8),
+  });
+
+  @override
+  State<HoverButton> createState() => _HoverButtonState();
+}
+
+class _HoverButtonState extends State<HoverButton> {
+  bool _isHovering = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _isHovering = true),
+      onExit: (_) => setState(() => _isHovering = false),
+      child: GestureDetector(
+        onTap: widget.onTap,
+        behavior: HitTestBehavior.opaque,
+        child: Container(
+          padding: widget.padding,
+          decoration: _isHovering
+              ? BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.grey.withValues(alpha: 0.5),
+                )
+              : null,
+          child: widget.child,
+        ),
+      ),
+    );
+  }
+}
+
 class CustomMediaKitControls extends StatefulWidget {
   final VideoState state;
   final Player player;
@@ -20,6 +64,7 @@ class CustomMediaKitControls extends StatefulWidget {
   final int? currentEpisodeIndex;
   final int? totalEpisodes;
   final String? sourceName;
+  final Function(bool isFullscreen)? onDLNAButtonPressed;
 
   const CustomMediaKitControls({
     super.key,
@@ -37,6 +82,7 @@ class CustomMediaKitControls extends StatefulWidget {
     this.currentEpisodeIndex,
     this.totalEpisodes,
     this.sourceName,
+    this.onDLNAButtonPressed,
   });
 
   @override
@@ -266,21 +312,13 @@ class _CustomMediaKitControlsState extends State<CustomMediaKitControls> {
   }
 
   void _toggleFullscreen() {
-    // 先更新本地全屏状态并刷新 UI
-    setState(() {
-      _isFullscreen = !_isFullscreen;
-    });
-
-    // 下一帧再触发实际的全屏切换
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        if (_isFullscreen) {
-          widget.state.enterFullscreen();
-        } else {
-          widget.state.exitFullscreen();
-        }
-      }
-    });
+    // 直接触发全屏切换，不要提前更新本地状态
+    // 状态会在 didUpdateWidget 中同步
+    if (_isFullscreen) {
+      widget.state.exitFullscreen();
+    } else {
+      widget.state.enterFullscreen();
+    }
   }
 
   Future<void> _showDLNADialog() async {
@@ -289,6 +327,17 @@ class _CustomMediaKitControlsState extends State<CustomMediaKitControls> {
       widget.onPause?.call();
     }
 
+    // 如果在全屏状态，通知父组件并退出全屏
+    if (_isFullscreen) {
+      widget.onDLNAButtonPressed?.call(true);
+      _toggleFullscreen();
+    } else {
+      // 非全屏状态，直接显示对话框
+      await _showDLNADialogInternal();
+    }
+  }
+
+  Future<void> _showDLNADialogInternal() async {
     // 获取当前播放位置
     final resumePos = widget.player.state.position;
 
@@ -416,22 +465,24 @@ class _CustomMediaKitControlsState extends State<CustomMediaKitControls> {
                 ],
               ),
             ),
-          if (_controlsVisible)
-            Positioned(
-              top: _isFullscreen ? 8 : 4,
-              left: _isFullscreen ? 16.0 : 8.0,
-              child: GestureDetector(
-                onTap: () async {
-                  _onUserInteraction();
-                  if (_isFullscreen) {
-                    _toggleFullscreen();
-                  } else {
-                    widget.onBackPressed?.call();
-                  }
-                },
-                behavior: HitTestBehavior.opaque,
-                child: Container(
-                  padding: const EdgeInsets.all(8),
+          // 顶部返回按钮
+          Positioned(
+            top: _isFullscreen ? 8 : 4,
+            left: _isFullscreen ? 16.0 : 8.0,
+            child: AnimatedOpacity(
+              opacity: _controlsVisible ? 1.0 : 0.0,
+              duration: const Duration(milliseconds: 200),
+              child: IgnorePointer(
+                ignoring: !_controlsVisible,
+                child: HoverButton(
+                  onTap: () async {
+                    _onUserInteraction();
+                    if (_isFullscreen) {
+                      _toggleFullscreen();
+                    } else {
+                      widget.onBackPressed?.call();
+                    }
+                  },
                   child: Icon(
                     Icons.arrow_back,
                     color: Colors.white,
@@ -440,18 +491,21 @@ class _CustomMediaKitControlsState extends State<CustomMediaKitControls> {
                 ),
               ),
             ),
-          if (_controlsVisible)
-            Positioned(
-              top: _isFullscreen ? 8 : 4,
-              right: _isFullscreen ? 16.0 : 8.0,
-              child: GestureDetector(
-                onTap: () async {
-                  _onUserInteraction();
-                  await _showDLNADialog();
-                },
-                behavior: HitTestBehavior.opaque,
-                child: Container(
-                  padding: const EdgeInsets.all(8),
+          ),
+          // 顶部投屏按钮
+          Positioned(
+            top: _isFullscreen ? 8 : 4,
+            right: _isFullscreen ? 16.0 : 8.0,
+            child: AnimatedOpacity(
+              opacity: _controlsVisible ? 1.0 : 0.0,
+              duration: const Duration(milliseconds: 200),
+              child: IgnorePointer(
+                ignoring: !_controlsVisible,
+                child: HoverButton(
+                  onTap: () async {
+                    _onUserInteraction();
+                    await _showDLNADialog();
+                  },
                   child: Icon(
                     Icons.cast,
                     color: Colors.white,
@@ -460,42 +514,44 @@ class _CustomMediaKitControlsState extends State<CustomMediaKitControls> {
                 ),
               ),
             ),
-          if (_controlsVisible)
-            Positioned(
-              top: _isFullscreen && _screenSize != null
-                  ? _screenSize!.height / 2 - 32
-                  : 0,
-              bottom: _isFullscreen ? null : 0,
-              left: 0,
-              right: 0,
-              child: Center(
-                child: GestureDetector(
-                  onTap: () {
-                    _onUserInteraction();
-                    if (widget.player.state.playing) {
-                      widget.player.pause();
-                      widget.onPause?.call();
-                    } else {
-                      widget.player.play();
-                    }
-                  },
-                  child: Icon(
-                    widget.player.state.playing
-                        ? Icons.pause
-                        : Icons.play_arrow,
-                    color: Colors.white,
-                    size: _isFullscreen ? 64 : 48,
+          ),
+          // 中央播放/暂停按钮 - 暂停时始终显示
+          Positioned.fill(
+            child: Center(
+              child: AnimatedOpacity(
+                opacity: (!widget.player.state.playing || _controlsVisible)
+                    ? 1.0
+                    : 0.0,
+                duration: const Duration(milliseconds: 200),
+                child: IgnorePointer(
+                  ignoring: widget.player.state.playing && !_controlsVisible,
+                  child: _CenterPlayButton(
+                    isPlaying: widget.player.state.playing,
+                    isFullscreen: _isFullscreen,
+                    onTap: () {
+                      _onUserInteraction();
+                      if (widget.player.state.playing) {
+                        widget.player.pause();
+                        widget.onPause?.call();
+                      } else {
+                        widget.player.play();
+                      }
+                    },
                   ),
                 ),
               ),
             ),
-          if (_controlsVisible)
-            Positioned(
-              bottom: _isFullscreen ? 58.0 : 42.0,
-              left: 0,
-              right: 0,
+          ),
+          // 进度条
+          Positioned(
+            bottom: _isFullscreen ? 58.0 : 42.0,
+            left: 0,
+            right: 0,
+            child: AnimatedOpacity(
+              opacity: _controlsVisible ? 1.0 : 0.0,
+              duration: const Duration(milliseconds: 200),
               child: IgnorePointer(
-                ignoring: false,
+                ignoring: !_controlsVisible,
                 child: Container(
                   height: 24,
                   margin: const EdgeInsets.symmetric(horizontal: 16),
@@ -517,40 +573,44 @@ class _CustomMediaKitControlsState extends State<CustomMediaKitControls> {
                       });
                     },
                     dragPosition: _dragPosition,
+                    isSeekingViaSwipe: _isSeekingViaSwipe,
                   ),
                 ),
               ),
             ),
-          if (_controlsVisible)
-            Positioned(
-              bottom: _isFullscreen ? 4.0 : -6.0,
-              left: 0,
-              right: 0,
-              child: GestureDetector(
-                onTap: () {},
-                behavior: HitTestBehavior.opaque,
-                child: Padding(
-                  padding: EdgeInsets.only(
-                    left: _isFullscreen ? 16.0 : 8.0,
-                    right: _isFullscreen ? 16.0 : 8.0,
-                    top: _isFullscreen ? 0.0 : 0.0,
-                    bottom: _isFullscreen ? 8.0 : 8.0,
-                  ),
-                  child: Row(
-                    children: [
-                      GestureDetector(
-                        onTap: () {
-                          _onUserInteraction();
-                          if (widget.player.state.playing) {
-                            widget.player.pause();
-                            widget.onPause?.call();
-                          } else {
-                            widget.player.play();
-                          }
-                        },
-                        behavior: HitTestBehavior.opaque,
-                        child: Container(
-                          padding: const EdgeInsets.all(8),
+          ),
+          // 底部控制栏
+          Positioned(
+            bottom: _isFullscreen ? 4.0 : -6.0,
+            left: 0,
+            right: 0,
+            child: AnimatedOpacity(
+              opacity: _controlsVisible ? 1.0 : 0.0,
+              duration: const Duration(milliseconds: 200),
+              child: IgnorePointer(
+                ignoring: !_controlsVisible,
+                child: GestureDetector(
+                  onTap: () {},
+                  behavior: HitTestBehavior.opaque,
+                  child: Padding(
+                    padding: EdgeInsets.only(
+                      left: _isFullscreen ? 16.0 : 8.0,
+                      right: _isFullscreen ? 16.0 : 8.0,
+                      top: _isFullscreen ? 0.0 : 0.0,
+                      bottom: _isFullscreen ? 8.0 : 8.0,
+                    ),
+                    child: Row(
+                      children: [
+                        HoverButton(
+                          onTap: () {
+                            _onUserInteraction();
+                            if (widget.player.state.playing) {
+                              widget.player.pause();
+                              widget.onPause?.call();
+                            } else {
+                              widget.player.play();
+                            }
+                          },
                           child: Icon(
                             widget.player.state.playing
                                 ? Icons.pause
@@ -559,18 +619,14 @@ class _CustomMediaKitControlsState extends State<CustomMediaKitControls> {
                             size: _isFullscreen ? 28 : 24,
                           ),
                         ),
-                      ),
-                      if (!widget.isLastEpisode)
-                        Transform.translate(
-                          offset: const Offset(-8, 0),
-                          child: GestureDetector(
-                            onTap: () {
-                              _onUserInteraction();
-                              widget.onNextEpisode?.call();
-                            },
-                            behavior: HitTestBehavior.opaque,
-                            child: Container(
-                              padding: const EdgeInsets.all(8),
+                        if (!widget.isLastEpisode)
+                          Transform.translate(
+                            offset: const Offset(-8, 0),
+                            child: HoverButton(
+                              onTap: () {
+                                _onUserInteraction();
+                                widget.onNextEpisode?.call();
+                              },
                               child: Icon(
                                 Icons.skip_next,
                                 color: Colors.white,
@@ -578,29 +634,25 @@ class _CustomMediaKitControlsState extends State<CustomMediaKitControls> {
                               ),
                             ),
                           ),
+                        Expanded(
+                          child: _buildPositionIndicator(),
                         ),
-                      Expanded(
-                        child: _buildPositionIndicator(),
-                      ),
-                      IconButton(
-                        icon: Icon(
-                          Icons.speed,
-                          color: Colors.white,
-                          size: _isFullscreen ? 22 : 20,
+                        HoverButton(
+                          onTap: () async {
+                            _onUserInteraction();
+                            await _showSpeedDialog();
+                          },
+                          child: Icon(
+                            Icons.speed,
+                            color: Colors.white,
+                            size: _isFullscreen ? 22 : 20,
+                          ),
                         ),
-                        onPressed: () async {
-                          _onUserInteraction();
-                          await _showSpeedDialog();
-                        },
-                      ),
-                      GestureDetector(
-                        onTap: () {
-                          _onUserInteraction();
-                          _toggleFullscreen();
-                        },
-                        behavior: HitTestBehavior.opaque,
-                        child: Container(
-                          padding: const EdgeInsets.all(8),
+                        HoverButton(
+                          onTap: () {
+                            _onUserInteraction();
+                            _toggleFullscreen();
+                          },
                           child: Icon(
                             _isFullscreen
                                 ? Icons.fullscreen_exit
@@ -609,12 +661,13 @@ class _CustomMediaKitControlsState extends State<CustomMediaKitControls> {
                             size: _isFullscreen ? 28 : 24,
                           ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),
             ),
+          ),
         ],
       ),
     );
@@ -705,6 +758,7 @@ class CustomVideoProgressBar extends StatefulWidget {
   final VoidCallback? onDragUpdate;
   final Function(Duration)? onPositionUpdate;
   final Duration? dragPosition;
+  final bool isSeekingViaSwipe;
 
   const CustomVideoProgressBar({
     super.key,
@@ -714,6 +768,7 @@ class CustomVideoProgressBar extends StatefulWidget {
     this.onDragUpdate,
     this.onPositionUpdate,
     this.dragPosition,
+    this.isSeekingViaSwipe = false,
   });
 
   @override
@@ -723,6 +778,7 @@ class CustomVideoProgressBar extends StatefulWidget {
 class _CustomVideoProgressBarState extends State<CustomVideoProgressBar> {
   bool _isDragging = false;
   double _dragValue = 0.0;
+  bool _isHoveringThumb = false;
   StreamSubscription? _positionSubscription;
 
   @override
@@ -755,102 +811,117 @@ class _CustomVideoProgressBarState extends State<CustomVideoProgressBar> {
       value = _dragValue;
     }
 
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onHorizontalDragStart: (details) {
-        _isDragging = true;
-        widget.onDragStart?.call();
-        _updateDragPosition(details.localPosition.dx, context);
-      },
-      onHorizontalDragUpdate: (details) {
-        if (_isDragging) {
-          widget.onDragUpdate?.call();
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onHorizontalDragStart: (details) {
+          _isDragging = true;
+          widget.onDragStart?.call();
           _updateDragPosition(details.localPosition.dx, context);
-        }
-      },
-      onHorizontalDragEnd: (details) {
-        if (_isDragging) {
+        },
+        onHorizontalDragUpdate: (details) {
+          if (_isDragging) {
+            widget.onDragUpdate?.call();
+            _updateDragPosition(details.localPosition.dx, context);
+          }
+        },
+        onHorizontalDragEnd: (details) {
+          if (_isDragging) {
+            final seekPosition = Duration(
+                milliseconds: (_dragValue * duration.inMilliseconds).round());
+            widget.player.seek(seekPosition);
+
+            setState(() {
+              _isDragging = false;
+            });
+            widget.onDragEnd?.call();
+          }
+        },
+        onTapDown: (details) {
+          widget.onDragStart?.call();
+          _updateDragPosition(details.localPosition.dx, context);
           final seekPosition = Duration(
               milliseconds: (_dragValue * duration.inMilliseconds).round());
           widget.player.seek(seekPosition);
-
-          setState(() {
-            _isDragging = false;
-          });
           widget.onDragEnd?.call();
-        }
-      },
-      onTapDown: (details) {
-        widget.onDragStart?.call();
-        _updateDragPosition(details.localPosition.dx, context);
-        final seekPosition = Duration(
-            milliseconds: (_dragValue * duration.inMilliseconds).round());
-        widget.player.seek(seekPosition);
-        widget.onDragEnd?.call();
-      },
-      child: Container(
-        height: 24,
-        color: Colors.transparent,
-        child: Center(
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final progressWidth = constraints.maxWidth;
-              final progressValue = value.clamp(0.0, 1.0);
-              final thumbPosition = (progressValue * progressWidth)
-                  .clamp(8.0, progressWidth - 8.0);
+        },
+        child: Container(
+          height: 24,
+          color: Colors.transparent,
+          child: Center(
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final progressWidth = constraints.maxWidth;
+                final progressValue = value.clamp(0.0, 1.0);
+                final thumbPosition = (progressValue * progressWidth)
+                    .clamp(8.0, progressWidth - 8.0);
 
-              return Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  // 进度条背景
-                  Positioned(
-                    left: 0,
-                    right: 0,
-                    top: 9,
-                    child: Container(
-                      height: 6,
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(3),
-                        color: Colors.white.withValues(alpha: 0.3),
+                return Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    // 进度条背景
+                    Positioned(
+                      left: 0,
+                      right: 0,
+                      top: 9,
+                      child: Container(
+                        height: 6,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(3),
+                          color: Colors.white.withValues(alpha: 0.3),
+                        ),
                       ),
                     ),
-                  ),
-                  // 已播放进度
-                  Positioned(
-                    left: 0,
-                    top: 9,
-                    child: Container(
-                      width: progressValue * progressWidth,
-                      height: 6,
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(3),
-                        color: Colors.red,
+                    // 已播放进度
+                    Positioned(
+                      left: 0,
+                      top: 9,
+                      child: Container(
+                        width: progressValue * progressWidth,
+                        height: 6,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(3),
+                          color: Colors.red,
+                        ),
                       ),
                     ),
-                  ),
-                  // 可拖拽的圆形把手
-                  Positioned(
-                    left: thumbPosition - 8,
-                    top: 4,
-                    child: Container(
-                      width: 16,
-                      height: 16,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: Colors.red,
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.3),
-                            blurRadius: 4,
-                            offset: const Offset(0, 2),
+                    // 可拖拽的圆形把手
+                    Positioned(
+                      left: thumbPosition - 8,
+                      top: 4,
+                      child: MouseRegion(
+                        onEnter: (_) => setState(() => _isHoveringThumb = true),
+                        onExit: (_) => setState(() => _isHoveringThumb = false),
+                        child: AnimatedScale(
+                          scale: (_isHoveringThumb ||
+                                  _isDragging ||
+                                  widget.isSeekingViaSwipe)
+                              ? 1.25
+                              : 1.0,
+                          duration: const Duration(milliseconds: 150),
+                          child: Container(
+                            width: 16,
+                            height: 16,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: Colors.red,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.3),
+                                  blurRadius: 4,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
+                            ),
                           ),
-                        ],
+                        ),
                       ),
                     ),
-                  ),
-                ],
-              );
-            },
+                  ],
+                );
+              },
+            ),
           ),
         ),
       ),
@@ -873,5 +944,70 @@ class _CustomVideoProgressBarState extends State<CustomVideoProgressBar> {
         Duration(milliseconds: (value * duration.inMilliseconds).round());
 
     widget.onPositionUpdate?.call(position);
+  }
+}
+
+// 中央播放/暂停按钮组件 - 支持 hover 效果
+class _CenterPlayButton extends StatefulWidget {
+  final bool isPlaying;
+  final bool isFullscreen;
+  final VoidCallback onTap;
+
+  const _CenterPlayButton({
+    required this.isPlaying,
+    required this.isFullscreen,
+    required this.onTap,
+  });
+
+  @override
+  State<_CenterPlayButton> createState() => _CenterPlayButtonState();
+}
+
+class _CenterPlayButtonState extends State<_CenterPlayButton> {
+  bool _isHovering = false;
+
+  @override
+  Widget build(BuildContext context) {
+    // 暂停时始终显示背景，播放时仅 hover 时显示背景
+    final showBackground = !widget.isPlaying || _isHovering;
+
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _isHovering = true),
+      onExit: (_) => setState(() => _isHovering = false),
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            // 背景圆形 - 使用 AnimatedOpacity 实现淡入淡出
+            AnimatedOpacity(
+              opacity: showBackground ? 1.0 : 0.0,
+              duration: const Duration(milliseconds: 200),
+              child: Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.grey.withValues(alpha: 0.7),
+                ),
+                child: SizedBox(
+                  width: widget.isFullscreen ? 64 : 48,
+                  height: widget.isFullscreen ? 64 : 48,
+                ),
+              ),
+            ),
+            // 图标
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Icon(
+                widget.isPlaying ? Icons.pause : Icons.play_arrow,
+                color: Colors.white,
+                size: widget.isFullscreen ? 64 : 48,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

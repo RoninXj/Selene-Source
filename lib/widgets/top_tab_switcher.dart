@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import '../services/theme_service.dart';
+import '../utils/device_utils.dart';
 
 class TopTabSwitcher extends StatefulWidget {
   final String selectedTab;
@@ -21,6 +22,10 @@ class _TopTabSwitcherState extends State<TopTabSwitcher>
     with TickerProviderStateMixin {
   late AnimationController _animationController;
   late Animation<double> _animation;
+  
+  // 用于跟踪鼠标悬停状态
+  bool _isHoveringHome = false;
+  bool _isHoveringFavorites = false;
 
   @override
   void initState() {
@@ -142,61 +147,90 @@ class _TopTabSwitcherState extends State<TopTabSwitcher>
 
   /// 构建标签按钮
   Widget _buildTabButton(String label, bool isSelected, int index, ThemeService themeService) {
-    return Container(
+    final bool isPC = DeviceUtils.isPC();
+    final bool isHovering = label == '首页' ? _isHoveringHome : _isHoveringFavorites;
+    
+    return SizedBox(
       height: 32,
-      child: GestureDetector(
-        onTap: () {
-          // 防止动画进行中的重复点击
-          if (!_animationController.isAnimating) {
-            widget.onTabChanged(label);
-          }
-        },
-        behavior: HitTestBehavior.opaque, // 确保整个区域都可以点击
-        child: AnimatedBuilder(
-          animation: _animation,
-          builder: (context, child) {
-            // 计算当前按钮的文字颜色
-            Color textColor;
-            FontWeight fontWeight;
-            
+      child: MouseRegion(
+        cursor: isPC ? SystemMouseCursors.click : MouseCursor.defer,
+        onEnter: isPC ? (_) {
+          setState(() {
             if (label == '首页') {
-              // 首页按钮：动画值越小（接近0）越选中
-              double progress = 1.0 - _animation.value;
-              textColor = Color.lerp(
-                themeService.isDarkMode 
-                    ? const Color(0xFFb0b0b0) 
-                    : const Color(0xFF7f8c8d), // 未选中颜色
-                themeService.isDarkMode 
-                    ? const Color(0xFFffffff) 
-                    : const Color(0xFF2c3e50), // 选中颜色
-                progress,
-              )!;
-              fontWeight = progress > 0.5 ? FontWeight.w600 : FontWeight.w400;
+              _isHoveringHome = true;
             } else {
-              // 收藏夹按钮：动画值越大（接近1）越选中
-              textColor = Color.lerp(
-                themeService.isDarkMode 
-                    ? const Color(0xFFb0b0b0) 
-                    : const Color(0xFF7f8c8d), // 未选中颜色
-                themeService.isDarkMode 
-                    ? const Color(0xFFffffff) 
-                    : const Color(0xFF2c3e50), // 选中颜色
-                _animation.value,
-              )!;
-              fontWeight = _animation.value > 0.5 ? FontWeight.w600 : FontWeight.w400;
+              _isHoveringFavorites = true;
             }
-
-            return Center(
-              child: Text(
-                label,
-                style: GoogleFonts.poppins(
-                  fontSize: 12, // 缩小字体
-                  fontWeight: fontWeight,
-                  color: textColor,
-                ),
-              ),
-            );
+          });
+        } : null,
+        onExit: isPC ? (_) {
+          setState(() {
+            if (label == '首页') {
+              _isHoveringHome = false;
+            } else {
+              _isHoveringFavorites = false;
+            }
+          });
+        } : null,
+        child: GestureDetector(
+          onTap: () {
+            // 防止动画进行中的重复点击
+            if (!_animationController.isAnimating) {
+              widget.onTabChanged(label);
+            }
           },
+          behavior: HitTestBehavior.opaque, // 确保整个区域都可以点击
+          child: AnimatedBuilder(
+            animation: _animation,
+            builder: (context, child) {
+              // 计算当前按钮的文字颜色
+              Color textColor;
+              FontWeight fontWeight;
+              
+              if (label == '首页') {
+                // 首页按钮：动画值越小（接近0）越选中
+                double progress = 1.0 - _animation.value;
+                textColor = Color.lerp(
+                  themeService.isDarkMode 
+                      ? const Color(0xFFb0b0b0) 
+                      : const Color(0xFF7f8c8d), // 未选中颜色
+                  themeService.isDarkMode 
+                      ? const Color(0xFFffffff) 
+                      : const Color(0xFF2c3e50), // 选中颜色
+                  progress,
+                )!;
+                fontWeight = progress > 0.5 ? FontWeight.w600 : FontWeight.w400;
+              } else {
+                // 收藏夹按钮：动画值越大（接近1）越选中
+                textColor = Color.lerp(
+                  themeService.isDarkMode 
+                      ? const Color(0xFFb0b0b0) 
+                      : const Color(0xFF7f8c8d), // 未选中颜色
+                  themeService.isDarkMode 
+                      ? const Color(0xFFffffff) 
+                      : const Color(0xFF2c3e50), // 选中颜色
+                  _animation.value,
+                )!;
+                fontWeight = _animation.value > 0.5 ? FontWeight.w600 : FontWeight.w400;
+              }
+              
+              // PC端悬停时文字变绿色
+              if (isPC && isHovering) {
+                textColor = const Color(0xFF27AE60); // 绿色
+              }
+
+              return Center(
+                child: Text(
+                  label,
+                  style: GoogleFonts.poppins(
+                    fontSize: 12, // 缩小字体
+                    fontWeight: fontWeight,
+                    color: textColor,
+                  ),
+                ),
+              );
+            },
+          ),
         ),
       ),
     );
