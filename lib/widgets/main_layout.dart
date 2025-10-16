@@ -47,9 +47,27 @@ class MainLayout extends StatefulWidget {
 class _MainLayoutState extends State<MainLayout> {
   bool _isSearchButtonPressed = false;
   bool _showUserMenu = false;
-  
+
   // 用于跟踪底部导航栏按钮的 hover 状态
   int? _hoveredNavIndex;
+
+  // 用于跟踪搜索按钮的 hover 状态
+  bool _isSearchButtonHovered = false;
+  
+  // 用于跟踪主题切换按钮的 hover 状态
+  bool _isThemeButtonHovered = false;
+  
+  // 用于跟踪用户按钮的 hover 状态
+  bool _isUserButtonHovered = false;
+  
+  // 用于跟踪返回按钮的 hover 状态
+  bool _isBackButtonHovered = false;
+  
+  // 用于跟踪搜索框内清除按钮的 hover 状态
+  bool _isClearButtonHovered = false;
+  
+  // 用于跟踪搜索框内搜索按钮的 hover 状态
+  bool _isSearchSubmitButtonHovered = false;
 
   @override
   Widget build(BuildContext context) {
@@ -125,10 +143,10 @@ class _MainLayoutState extends State<MainLayout> {
 
   Widget _buildHeader(BuildContext context, ThemeService themeService) {
     final isTablet = DeviceUtils.isTablet(context);
-    
+
     // macOS 下需要额外的顶部 padding 来避免与透明标题栏重叠
-    final topPadding = DeviceUtils.isMacOS() 
-        ? MediaQuery.of(context).padding.top + 32 
+    final topPadding = DeviceUtils.isMacOS()
+        ? MediaQuery.of(context).padding.top + 32
         : MediaQuery.of(context).padding.top + 8;
 
     return Container(
@@ -173,7 +191,23 @@ class _MainLayoutState extends State<MainLayout> {
             left: 0,
             top: 4,
             child: MouseRegion(
-              cursor: DeviceUtils.isPC() ? SystemMouseCursors.click : MouseCursor.defer,
+              cursor: DeviceUtils.isPC()
+                  ? SystemMouseCursors.click
+                  : MouseCursor.defer,
+              onEnter: DeviceUtils.isPC()
+                  ? (_) {
+                      setState(() {
+                        _isSearchButtonHovered = true;
+                      });
+                    }
+                  : null,
+              onExit: DeviceUtils.isPC()
+                  ? (_) {
+                      setState(() {
+                        _isSearchButtonHovered = false;
+                      });
+                    }
+                  : null,
               child: GestureDetector(
                 onTap: () {
                   // 防止重复点击
@@ -198,9 +232,17 @@ class _MainLayoutState extends State<MainLayout> {
                   });
                 },
                 behavior: HitTestBehavior.opaque,
-                child: SizedBox(
+                child: Container(
                   width: 32,
                   height: 32,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: DeviceUtils.isPC() && _isSearchButtonHovered
+                        ? (themeService.isDarkMode
+                            ? const Color(0xFF333333)
+                            : const Color(0xFFe0e0e0))
+                        : Colors.transparent,
+                  ),
                   child: Center(
                     child: Icon(
                       LucideIcons.search,
@@ -279,52 +321,143 @@ class _MainLayoutState extends State<MainLayout> {
               ? Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    // 平板模式：使用 IconButton
+                    // 平板模式：清除按钮
                     if (widget.searchQuery?.isNotEmpty ?? false)
-                      IconButton(
-                        icon: Icon(
-                          LucideIcons.x,
-                          color: themeService.isDarkMode
-                              ? const Color(0xFFb0b0b0)
-                              : const Color(0xFF7f8c8d),
-                          size: 18,
+                      MouseRegion(
+                        cursor: DeviceUtils.isPC()
+                            ? SystemMouseCursors.click
+                            : MouseCursor.defer,
+                        onEnter: DeviceUtils.isPC()
+                            ? (_) {
+                                setState(() {
+                                  _isClearButtonHovered = true;
+                                });
+                              }
+                            : null,
+                        onExit: DeviceUtils.isPC()
+                            ? (_) {
+                                setState(() {
+                                  _isClearButtonHovered = false;
+                                });
+                              }
+                            : null,
+                        child: GestureDetector(
+                          onTap: widget.onClearSearch,
+                          behavior: HitTestBehavior.opaque,
+                          child: Container(
+                            margin: const EdgeInsets.symmetric(horizontal: 4),
+                            padding: const EdgeInsets.all(6),
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: DeviceUtils.isPC() && _isClearButtonHovered
+                                  ? (themeService.isDarkMode
+                                      ? const Color(0xFF333333)
+                                      : const Color(0xFFe0e0e0))
+                                  : Colors.transparent,
+                            ),
+                            child: Icon(
+                              LucideIcons.x,
+                              color: themeService.isDarkMode
+                                  ? const Color(0xFFb0b0b0)
+                                  : const Color(0xFF7f8c8d),
+                              size: 18,
+                            ),
+                          ),
                         ),
-                        onPressed: widget.onClearSearch,
                       ),
-                    IconButton(
-                      padding: const EdgeInsets.only(left: 2.0, right: 8.0),
-                      constraints: const BoxConstraints(),
-                      icon: Icon(
-                        LucideIcons.search,
-                        color: (widget.searchQuery?.trim().isNotEmpty ?? false)
-                            ? const Color(0xFF27ae60)
-                            : themeService.isDarkMode
-                                ? const Color(0xFFb0b0b0)
-                                : const Color(0xFF7f8c8d),
-                        size: 18,
+                    // 平板模式：搜索按钮
+                    MouseRegion(
+                      cursor: (widget.searchQuery?.trim().isNotEmpty ?? false) &&
+                              DeviceUtils.isPC()
+                          ? SystemMouseCursors.click
+                          : MouseCursor.defer,
+                      onEnter: DeviceUtils.isPC() &&
+                              (widget.searchQuery?.trim().isNotEmpty ?? false)
+                          ? (_) {
+                              setState(() {
+                                _isSearchSubmitButtonHovered = true;
+                              });
+                            }
+                          : null,
+                      onExit: DeviceUtils.isPC() &&
+                              (widget.searchQuery?.trim().isNotEmpty ?? false)
+                          ? (_) {
+                              setState(() {
+                                _isSearchSubmitButtonHovered = false;
+                              });
+                            }
+                          : null,
+                      child: GestureDetector(
+                        onTap: (widget.searchQuery?.trim().isNotEmpty ?? false)
+                            ? () => widget.onSearchSubmitted
+                                ?.call(widget.searchQuery!)
+                            : null,
+                        behavior: HitTestBehavior.opaque,
+                        child: Container(
+                          margin: const EdgeInsets.only(left: 2, right: 8),
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: DeviceUtils.isPC() &&
+                                    _isSearchSubmitButtonHovered &&
+                                    (widget.searchQuery?.trim().isNotEmpty ??
+                                        false)
+                                ? (themeService.isDarkMode
+                                    ? const Color(0xFF333333)
+                                    : const Color(0xFFe0e0e0))
+                                : Colors.transparent,
+                          ),
+                          child: Icon(
+                            LucideIcons.search,
+                            color:
+                                (widget.searchQuery?.trim().isNotEmpty ?? false)
+                                    ? const Color(0xFF27ae60)
+                                    : themeService.isDarkMode
+                                        ? const Color(0xFFb0b0b0)
+                                        : const Color(0xFF7f8c8d),
+                            size: 18,
+                          ),
+                        ),
                       ),
-                      onPressed:
-                          (widget.searchQuery?.trim().isNotEmpty ?? false)
-                              ? () => widget.onSearchSubmitted
-                                  ?.call(widget.searchQuery!)
-                              : null,
                     ),
                   ],
                 )
               : Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    // 非平板模式：紧凑样式，无点击效果
+                    // 非平板模式：清除按钮
                     if (widget.searchQuery?.isNotEmpty ?? false)
-                      Material(
-                        color: Colors.transparent,
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(16),
+                      MouseRegion(
+                        cursor: DeviceUtils.isPC()
+                            ? SystemMouseCursors.click
+                            : MouseCursor.defer,
+                        onEnter: DeviceUtils.isPC()
+                            ? (_) {
+                                setState(() {
+                                  _isClearButtonHovered = true;
+                                });
+                              }
+                            : null,
+                        onExit: DeviceUtils.isPC()
+                            ? (_) {
+                                setState(() {
+                                  _isClearButtonHovered = false;
+                                });
+                              }
+                            : null,
+                        child: GestureDetector(
                           onTap: widget.onClearSearch,
-                          splashColor: Colors.transparent,
-                          highlightColor: Colors.transparent,
-                          child: Padding(
-                            padding: const EdgeInsets.all(8.0),
+                          behavior: HitTestBehavior.opaque,
+                          child: Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: DeviceUtils.isPC() && _isClearButtonHovered
+                                  ? (themeService.isDarkMode
+                                      ? const Color(0xFF333333)
+                                      : const Color(0xFFe0e0e0))
+                                  : Colors.transparent,
+                            ),
                             child: Icon(
                               LucideIcons.x,
                               color: themeService.isDarkMode
@@ -335,19 +468,48 @@ class _MainLayoutState extends State<MainLayout> {
                           ),
                         ),
                       ),
-                    Material(
-                      color: Colors.transparent,
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(16),
+                    // 非平板模式：搜索按钮
+                    MouseRegion(
+                      cursor: (widget.searchQuery?.trim().isNotEmpty ?? false) &&
+                              DeviceUtils.isPC()
+                          ? SystemMouseCursors.click
+                          : MouseCursor.defer,
+                      onEnter: DeviceUtils.isPC() &&
+                              (widget.searchQuery?.trim().isNotEmpty ?? false)
+                          ? (_) {
+                              setState(() {
+                                _isSearchSubmitButtonHovered = true;
+                              });
+                            }
+                          : null,
+                      onExit: DeviceUtils.isPC() &&
+                              (widget.searchQuery?.trim().isNotEmpty ?? false)
+                          ? (_) {
+                              setState(() {
+                                _isSearchSubmitButtonHovered = false;
+                              });
+                            }
+                          : null,
+                      child: GestureDetector(
                         onTap: (widget.searchQuery?.trim().isNotEmpty ?? false)
                             ? () => widget.onSearchSubmitted
                                 ?.call(widget.searchQuery!)
                             : null,
-                        splashColor: Colors.transparent,
-                        highlightColor: Colors.transparent,
-                        child: Padding(
+                        behavior: HitTestBehavior.opaque,
+                        child: Container(
                           padding: const EdgeInsets.only(
-                              left: 4.0, right: 12.0, top: 8.0, bottom: 8.0),
+                              left: 4, right: 12, top: 8, bottom: 8),
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: DeviceUtils.isPC() &&
+                                    _isSearchSubmitButtonHovered &&
+                                    (widget.searchQuery?.trim().isNotEmpty ??
+                                        false)
+                                ? (themeService.isDarkMode
+                                    ? const Color(0xFF333333)
+                                    : const Color(0xFFe0e0e0))
+                                : Colors.transparent,
+                          ),
                           child: Icon(
                             LucideIcons.search,
                             color:
@@ -389,6 +551,60 @@ class _MainLayoutState extends State<MainLayout> {
         child: Stack(
           alignment: Alignment.center,
           children: [
+            // 左侧返回按钮
+            Positioned(
+              left: 0,
+              child: MouseRegion(
+                cursor: DeviceUtils.isPC()
+                    ? SystemMouseCursors.click
+                    : MouseCursor.defer,
+                onEnter: DeviceUtils.isPC()
+                    ? (_) {
+                        setState(() {
+                          _isBackButtonHovered = true;
+                        });
+                      }
+                    : null,
+                onExit: DeviceUtils.isPC()
+                    ? (_) {
+                        setState(() {
+                          _isBackButtonHovered = false;
+                        });
+                      }
+                    : null,
+                child: GestureDetector(
+                  onTap: () {
+                    final callback = widget.onSearchModeChanged;
+                    if (callback != null) {
+                      callback(false);
+                    }
+                  },
+                  behavior: HitTestBehavior.opaque,
+                  child: Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: DeviceUtils.isPC() && _isBackButtonHovered
+                          ? (themeService.isDarkMode
+                              ? const Color(0xFF333333)
+                              : const Color(0xFFe0e0e0))
+                          : Colors.transparent,
+                    ),
+                    child: Center(
+                      child: Icon(
+                        LucideIcons.arrowLeft,
+                        color: themeService.isDarkMode
+                            ? const Color(0xFFffffff)
+                            : const Color(0xFF2c3e50),
+                        size: 24,
+                        weight: 1.0,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
             // 搜索框在整个屏幕水平居中
             Center(
               child: SizedBox(
@@ -425,41 +641,60 @@ class _MainLayoutState extends State<MainLayout> {
       mainAxisSize: MainAxisSize.min,
       children: [
         // 深浅模式切换按钮
-        SizedBox(
-          width: 32,
-          height: 32,
-          child: Material(
-            color: Colors.transparent,
-            child: Ink(
-              decoration: const BoxDecoration(
+        MouseRegion(
+          cursor: DeviceUtils.isPC()
+              ? SystemMouseCursors.click
+              : MouseCursor.defer,
+          onEnter: DeviceUtils.isPC()
+              ? (_) {
+                  setState(() {
+                    _isThemeButtonHovered = true;
+                  });
+                }
+              : null,
+          onExit: DeviceUtils.isPC()
+              ? (_) {
+                  setState(() {
+                    _isThemeButtonHovered = false;
+                  });
+                }
+              : null,
+          child: GestureDetector(
+            onTap: () {
+              themeService.toggleTheme(context);
+            },
+            behavior: HitTestBehavior.opaque,
+            child: Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
                 shape: BoxShape.circle,
+                color: DeviceUtils.isPC() && _isThemeButtonHovered
+                    ? (themeService.isDarkMode
+                        ? const Color(0xFF333333)
+                        : const Color(0xFFe0e0e0))
+                    : Colors.transparent,
               ),
-              child: InkWell(
-                borderRadius: BorderRadius.circular(24),
-                onTap: () {
-                  themeService.toggleTheme(context);
-                },
-                child: Center(
-                  child: AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 300),
-                    transitionBuilder:
-                        (Widget child, Animation<double> animation) {
-                      return ScaleTransition(
-                        scale: animation,
-                        child: child,
-                      );
-                    },
-                    child: Icon(
-                      themeService.isDarkMode
-                          ? LucideIcons.sun
-                          : LucideIcons.moon,
-                      key: ValueKey(themeService.isDarkMode),
-                      color: themeService.isDarkMode
-                          ? const Color(0xFFffffff)
-                          : const Color(0xFF2c3e50),
-                      size: 24,
-                      weight: 1.0,
-                    ),
+              child: Center(
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 300),
+                  transitionBuilder:
+                      (Widget child, Animation<double> animation) {
+                    return ScaleTransition(
+                      scale: animation,
+                      child: child,
+                    );
+                  },
+                  child: Icon(
+                    themeService.isDarkMode
+                        ? LucideIcons.sun
+                        : LucideIcons.moon,
+                    key: ValueKey(themeService.isDarkMode),
+                    color: themeService.isDarkMode
+                        ? const Color(0xFFffffff)
+                        : const Color(0xFF2c3e50),
+                    size: 24,
+                    weight: 1.0,
                   ),
                 ),
               ),
@@ -468,31 +703,50 @@ class _MainLayoutState extends State<MainLayout> {
         ),
         const SizedBox(width: 12),
         // 用户按钮
-        SizedBox(
-          width: 32,
-          height: 32,
-          child: Material(
-            color: Colors.transparent,
-            child: Ink(
-              decoration: const BoxDecoration(
-                shape: BoxShape.circle,
-              ),
-              child: InkWell(
-                borderRadius: BorderRadius.circular(24),
-                onTap: () {
+        MouseRegion(
+          cursor: DeviceUtils.isPC()
+              ? SystemMouseCursors.click
+              : MouseCursor.defer,
+          onEnter: DeviceUtils.isPC()
+              ? (_) {
                   setState(() {
-                    _showUserMenu = true;
+                    _isUserButtonHovered = true;
                   });
-                },
-                child: Center(
-                  child: Icon(
-                    LucideIcons.user,
-                    color: themeService.isDarkMode
-                        ? const Color(0xFFffffff)
-                        : const Color(0xFF2c3e50),
-                    size: 24,
-                    weight: 1.0,
-                  ),
+                }
+              : null,
+          onExit: DeviceUtils.isPC()
+              ? (_) {
+                  setState(() {
+                    _isUserButtonHovered = false;
+                  });
+                }
+              : null,
+          child: GestureDetector(
+            onTap: () {
+              setState(() {
+                _showUserMenu = true;
+              });
+            },
+            behavior: HitTestBehavior.opaque,
+            child: Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: DeviceUtils.isPC() && _isUserButtonHovered
+                    ? (themeService.isDarkMode
+                        ? const Color(0xFF333333)
+                        : const Color(0xFFe0e0e0))
+                    : Colors.transparent,
+              ),
+              child: Center(
+                child: Icon(
+                  LucideIcons.user,
+                  color: themeService.isDarkMode
+                      ? const Color(0xFFffffff)
+                      : const Color(0xFF2c3e50),
+                  size: 24,
+                  weight: 1.0,
                 ),
               ),
             ),
@@ -550,17 +804,23 @@ class _MainLayoutState extends State<MainLayout> {
 
             return [
               MouseRegion(
-                cursor: DeviceUtils.isPC() ? SystemMouseCursors.click : MouseCursor.defer,
-                onEnter: DeviceUtils.isPC() ? (_) {
-                  setState(() {
-                    _hoveredNavIndex = index;
-                  });
-                } : null,
-                onExit: DeviceUtils.isPC() ? (_) {
-                  setState(() {
-                    _hoveredNavIndex = null;
-                  });
-                } : null,
+                cursor: DeviceUtils.isPC()
+                    ? SystemMouseCursors.click
+                    : MouseCursor.defer,
+                onEnter: DeviceUtils.isPC()
+                    ? (_) {
+                        setState(() {
+                          _hoveredNavIndex = index;
+                        });
+                      }
+                    : null,
+                onExit: DeviceUtils.isPC()
+                    ? (_) {
+                        setState(() {
+                          _hoveredNavIndex = null;
+                        });
+                      }
+                    : null,
                 child: GestureDetector(
                   onTap: () {
                     widget.onBottomNavChanged(index);

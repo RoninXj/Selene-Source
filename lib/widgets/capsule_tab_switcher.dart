@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import '../services/theme_service.dart';
+import '../utils/device_utils.dart';
 
 class CapsuleTabSwitcher extends StatefulWidget {
   final List<String> tabs;
@@ -108,8 +109,8 @@ class _CapsuleTabSwitcherState extends State<CapsuleTabSwitcher>
       final newWidth = _tabWidths[_selectedIndex];
 
       setState(() {
-        _leftAnimation =
-            Tween<double>(begin: oldLeft, end: newLeft).animate(_progressAnimation);
+        _leftAnimation = Tween<double>(begin: oldLeft, end: newLeft)
+            .animate(_progressAnimation);
         _widthAnimation = Tween<double>(begin: oldWidth, end: newWidth)
             .animate(_progressAnimation);
       });
@@ -194,43 +195,128 @@ class _CapsuleTabSwitcherState extends State<CapsuleTabSwitcher>
   }
 
   Widget _buildTabButton(String label, int index, ThemeService themeService) {
-    return GestureDetector(
+    return _CapsuleTabHover(
+      isPC: DeviceUtils.isPC(),
+      label: label,
+      index: index,
+      selectedIndex: _selectedIndex,
+      oldIndex: _oldIndex,
+      progressAnimation: _progressAnimation,
+      animationController: _animationController,
+      themeService: themeService,
       onTap: () {
         if (!_animationController.isAnimating) {
           widget.onTabChanged(label);
         }
       },
-      behavior: HitTestBehavior.opaque,
-      child: Center(
-        child: AnimatedBuilder(
-          animation: _progressAnimation,
-          builder: (context, child) {
-            double progress = 0.0;
-            if (index == _selectedIndex) {
-              progress = _animationController.isAnimating ? _progressAnimation.value : 1.0;
-            } else if (index == _oldIndex) {
-              progress = _animationController.isAnimating ? 1.0 - _progressAnimation.value : 0.0;
-            }
+    );
+  }
+}
 
-            final color = Color.lerp(
-              themeService.isDarkMode
-                  ? const Color(0xFFb0b0b0)
-                  : const Color(0xFF7f8c8d),
-              themeService.isDarkMode ? Colors.white : Colors.black,
-              progress,
-            );
+// Hover widget for CapsuleTab on PC
+class _CapsuleTabHover extends StatefulWidget {
+  final bool isPC;
+  final String label;
+  final int index;
+  final int selectedIndex;
+  final int oldIndex;
+  final Animation<double> progressAnimation;
+  final AnimationController animationController;
+  final ThemeService themeService;
+  final VoidCallback onTap;
 
-            final fontWeight = progress > 0.5 ? FontWeight.w600 : FontWeight.w400;
+  const _CapsuleTabHover({
+    required this.isPC,
+    required this.label,
+    required this.index,
+    required this.selectedIndex,
+    required this.oldIndex,
+    required this.progressAnimation,
+    required this.animationController,
+    required this.themeService,
+    required this.onTap,
+  });
 
-            return Text(
-              label,
-              style: GoogleFonts.poppins(
-                fontSize: 12,
-                fontWeight: fontWeight,
-                color: color,
-              ),
-            );
-          },
+  @override
+  State<_CapsuleTabHover> createState() => _CapsuleTabHoverState();
+}
+
+class _CapsuleTabHoverState extends State<_CapsuleTabHover> {
+  bool _isHovered = false;
+
+  bool get _isSelected {
+    // 判断当前tab是否被选中
+    if (widget.index == widget.selectedIndex) {
+      return true;
+    }
+    // 如果正在动画中，oldIndex也算部分选中
+    if (widget.animationController.isAnimating &&
+        widget.index == widget.oldIndex) {
+      return true;
+    }
+    return false;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      onEnter: (_) => setState(() => _isHovered = true),
+      onExit: (_) => setState(() => _isHovered = false),
+      cursor: _isSelected ? SystemMouseCursors.basic : SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: widget.onTap,
+        behavior: HitTestBehavior.opaque,
+        child: Center(
+          child: AnimatedBuilder(
+            animation: widget.progressAnimation,
+            builder: (context, child) {
+              double progress = 0.0;
+              if (widget.index == widget.selectedIndex) {
+                progress = widget.animationController.isAnimating
+                    ? widget.progressAnimation.value
+                    : 1.0;
+              } else if (widget.index == widget.oldIndex) {
+                progress = widget.animationController.isAnimating
+                    ? 1.0 - widget.progressAnimation.value
+                    : 0.0;
+              }
+
+              // 判断是否选中
+              final isSelected = progress > 0.0;
+
+              Color color;
+              if (isSelected) {
+                // 选中状态：使用原来的颜色插值逻辑
+                color = Color.lerp(
+                  widget.themeService.isDarkMode
+                      ? const Color(0xFFb0b0b0)
+                      : const Color(0xFF7f8c8d),
+                  widget.themeService.isDarkMode ? Colors.white : Colors.black,
+                  progress,
+                )!;
+              } else if (widget.isPC && _isHovered) {
+                // PC上未选中且hover：显示绿色
+                color = const Color(0xFF27AE60);
+              } else {
+                // 未选中且未hover：默认颜色
+                color = widget.themeService.isDarkMode
+                    ? const Color(0xFFb0b0b0)
+                    : const Color(0xFF7f8c8d);
+              }
+
+              final fontWeight =
+                  progress > 0.5 ? FontWeight.w600 : FontWeight.w400;
+
+              return Text(
+                widget.label,
+                style: GoogleFonts.poppins(
+                  fontSize: 12,
+                  fontWeight: fontWeight,
+                  color: color,
+                ),
+              );
+            },
+          ),
         ),
       ),
     );

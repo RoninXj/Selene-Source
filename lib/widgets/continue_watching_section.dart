@@ -57,6 +57,9 @@ class _ContinueWatchingSectionState extends State<ContinueWatchingSection>
   bool _showLeftScroll = false;
   bool _showRightScroll = false;
   bool _isHovered = false;
+  
+  // hover 状态
+  bool _isClearButtonHovered = false;
 
   @override
   void initState() {
@@ -504,19 +507,41 @@ class _ContinueWatchingSectionState extends State<ContinueWatchingSection>
                   },
                 ),
                 if (_playRecords.isNotEmpty)
-                  TextButton(
-                    onPressed: _showClearConfirmation,
-                    style: TextButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 4),
-                      minimumSize: Size.zero,
-                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    ),
-                    child: Text(
-                      '清空',
-                      style: GoogleFonts.poppins(
-                        fontSize: 14,
-                        color: const Color(0xFF7f8c8d),
+                  MouseRegion(
+                    cursor: DeviceUtils.isPC()
+                        ? SystemMouseCursors.click
+                        : MouseCursor.defer,
+                    onEnter: DeviceUtils.isPC()
+                        ? (_) {
+                            setState(() {
+                              _isClearButtonHovered = true;
+                            });
+                          }
+                        : null,
+                    onExit: DeviceUtils.isPC()
+                        ? (_) {
+                            setState(() {
+                              _isClearButtonHovered = false;
+                            });
+                          }
+                        : null,
+                    child: TextButton(
+                      onPressed: _showClearConfirmation,
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 4),
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        overlayColor: Colors.transparent,
+                      ),
+                      child: Text(
+                        '清空',
+                        style: GoogleFonts.poppins(
+                          fontSize: 14,
+                          color: DeviceUtils.isPC() && _isClearButtonHovered
+                              ? const Color(0xFFe74c3c) // hover 时红色
+                              : const Color(0xFF7f8c8d),
+                        ),
                       ),
                     ),
                   ),

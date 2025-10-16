@@ -12,13 +12,8 @@ import '../widgets/video_menu_bottom_sheet.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../widgets/pulsing_dots_indicator.dart';
 import 'player_screen.dart';
-
-class SelectorOption {
-  final String label;
-  final String value;
-
-  const SelectorOption({required this.label, required this.value});
-}
+import '../widgets/filter_pill_hover.dart';
+import '../utils/device_utils.dart';
 
 class MovieScreen extends StatefulWidget {
   const MovieScreen({super.key});
@@ -166,7 +161,7 @@ class _MovieScreenState extends State<MovieScreen> {
   void _handleScroll() {
     if (_scrollController.hasClients) {
       final position = _scrollController.position;
-      
+
       // 如果内容不足以滚动（maxScrollExtent <= 0），直接尝试加载更多
       if (position.maxScrollExtent <= 0) {
         // 检查是否有更多数据且当前不在加载中
@@ -175,7 +170,7 @@ class _MovieScreenState extends State<MovieScreen> {
         }
         return;
       }
-      
+
       // 正常滚动情况：当滚动到距离底部50像素内时触发加载
       const double threshold = 50.0;
       if (position.pixels >= position.maxScrollExtent - threshold) {
@@ -186,12 +181,15 @@ class _MovieScreenState extends State<MovieScreen> {
 
   /// 检查内容是否不足一屏，如果是则自动加载更多
   void _checkAndLoadMoreIfNeeded() {
-    if (!_scrollController.hasClients || !_hasMore || _isLoading || _isLoadingMore) {
+    if (!_scrollController.hasClients ||
+        !_hasMore ||
+        _isLoading ||
+        _isLoadingMore) {
       return;
     }
-    
+
     final position = _scrollController.position;
-    
+
     // 如果内容不足以滚动，说明没有填满屏幕，自动加载更多
     if (position.maxScrollExtent <= 0 && _movies.isNotEmpty) {
       _loadMoreMovies();
@@ -217,28 +215,25 @@ class _MovieScreenState extends State<MovieScreen> {
       String categoryValue = _selectedMovieType;
       String regionValue = _selectedMovieRegion;
       String yearValue = _selectedMovieYear;
-      
+
       // 转换地区参数为中文标签
       if (regionValue != 'all') {
-        regionValue = _movieRegionOptions
-            .firstWhere((e) => e.value == regionValue)
-            .label;
+        regionValue =
+            _movieRegionOptions.firstWhere((e) => e.value == regionValue).label;
       }
-      
+
       // 转换年代参数为中文标签
       if (yearValue != 'all') {
-        yearValue = _movieYearOptions
-            .firstWhere((e) => e.value == yearValue)
-            .label;
+        yearValue =
+            _movieYearOptions.firstWhere((e) => e.value == yearValue).label;
       }
-      
+
       // 转换类型参数为中文标签
       if (categoryValue != 'all') {
-        categoryValue = _movieTypeOptions
-            .firstWhere((e) => e.value == categoryValue)
-            .label;
+        categoryValue =
+            _movieTypeOptions.firstWhere((e) => e.value == categoryValue).label;
       }
-      
+
       final params = DoubanRecommendsParams(
         kind: 'movie',
         category: categoryValue,
@@ -248,7 +243,7 @@ class _MovieScreenState extends State<MovieScreen> {
         pageLimit: _pageLimit,
         page: _page,
       );
-      
+
       final result = await DoubanService.fetchDoubanRecommends(
         context,
         params,
@@ -259,7 +254,7 @@ class _MovieScreenState extends State<MovieScreen> {
           // 筛选状态已改变，忽略这个过期的响应
           return;
         }
-        
+
         setState(() {
           if (result.success && result.data != null) {
             _movies.addAll(result.data!);
@@ -273,7 +268,7 @@ class _MovieScreenState extends State<MovieScreen> {
           }
           _isLoading = false;
         });
-        
+
         // 如果是刷新且内容不足一屏，尝试自动加载更多
         if (isRefresh && result.success && result.data != null) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -297,7 +292,7 @@ class _MovieScreenState extends State<MovieScreen> {
           // 筛选状态已改变，忽略这个过期的响应
           return;
         }
-        
+
         setState(() {
           if (result.success && result.data != null) {
             _movies.addAll(result.data!);
@@ -311,7 +306,7 @@ class _MovieScreenState extends State<MovieScreen> {
           }
           _isLoading = false;
         });
-        
+
         // 如果是刷新且内容不足一屏，尝试自动加载更多
         if (isRefresh && result.success && result.data != null) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -337,28 +332,25 @@ class _MovieScreenState extends State<MovieScreen> {
       String categoryValue = _selectedMovieType;
       String regionValue = _selectedMovieRegion;
       String yearValue = _selectedMovieYear;
-      
+
       // 转换地区参数为中文标签
       if (regionValue != 'all') {
-        regionValue = _movieRegionOptions
-            .firstWhere((e) => e.value == regionValue)
-            .label;
+        regionValue =
+            _movieRegionOptions.firstWhere((e) => e.value == regionValue).label;
       }
-      
+
       // 转换年代参数为中文标签
       if (yearValue != 'all') {
-        yearValue = _movieYearOptions
-            .firstWhere((e) => e.value == yearValue)
-            .label;
+        yearValue =
+            _movieYearOptions.firstWhere((e) => e.value == yearValue).label;
       }
-      
+
       // 转换类型参数为中文标签
       if (categoryValue != 'all') {
-        categoryValue = _movieTypeOptions
-            .firstWhere((e) => e.value == categoryValue)
-            .label;
+        categoryValue =
+            _movieTypeOptions.firstWhere((e) => e.value == categoryValue).label;
       }
-      
+
       final params = DoubanRecommendsParams(
         kind: 'movie',
         category: categoryValue,
@@ -368,7 +360,7 @@ class _MovieScreenState extends State<MovieScreen> {
         pageLimit: _pageLimit,
         page: _page,
       );
-      
+
       final result = await DoubanService.fetchDoubanRecommends(
         context,
         params,
@@ -379,7 +371,7 @@ class _MovieScreenState extends State<MovieScreen> {
           // 筛选状态已改变，忽略这个过期的响应
           return;
         }
-        
+
         setState(() {
           if (result.success && result.data != null) {
             _movies.addAll(result.data!);
@@ -410,7 +402,7 @@ class _MovieScreenState extends State<MovieScreen> {
           // 筛选状态已改变，忽略这个过期的响应
           return;
         }
-        
+
         setState(() {
           if (result.success && result.data != null) {
             _movies.addAll(result.data!);
@@ -604,19 +596,23 @@ class _MovieScreenState extends State<MovieScreen> {
             scrollDirection: Axis.horizontal,
             child: Row(
               children: [
-                _buildFilterPill('类型', _movieTypeOptions, _selectedMovieType, (v) {
+                _buildFilterPill('类型', _movieTypeOptions, _selectedMovieType,
+                    (v) {
                   setState(() => _selectedMovieType = v);
                   _fetchMovies(isRefresh: true);
                 }),
-                _buildFilterPill('地区', _movieRegionOptions, _selectedMovieRegion, (v) {
+                _buildFilterPill(
+                    '地区', _movieRegionOptions, _selectedMovieRegion, (v) {
                   setState(() => _selectedMovieRegion = v);
                   _fetchMovies(isRefresh: true);
                 }),
-                _buildFilterPill('年代', _movieYearOptions, _selectedMovieYear, (v) {
+                _buildFilterPill('年代', _movieYearOptions, _selectedMovieYear,
+                    (v) {
                   setState(() => _selectedMovieYear = v);
                   _fetchMovies(isRefresh: true);
                 }),
-                _buildFilterPill('排序', _movieSortOptions, _selectedMovieSort, (v) {
+                _buildFilterPill('排序', _movieSortOptions, _selectedMovieSort,
+                    (v) {
                   setState(() => _selectedMovieSort = v);
                   _fetchMovies(isRefresh: true);
                 }),
@@ -645,9 +641,13 @@ class _MovieScreenState extends State<MovieScreen> {
           scrollDirection: Axis.horizontal,
           child: CapsuleTabSwitcher(
             tabs: _movieSecondaryOptions.map((e) => e.label).toList(),
-            selectedTab: _movieSecondaryOptions.firstWhere((e) => e.value == _selectedRegionValue).label,
+            selectedTab: _movieSecondaryOptions
+                .firstWhere((e) => e.value == _selectedRegionValue)
+                .label,
             onTabChanged: (newLabel) {
-              final newValue = _movieSecondaryOptions.firstWhere((e) => e.label == newLabel).value;
+              final newValue = _movieSecondaryOptions
+                  .firstWhere((e) => e.label == newLabel)
+                  .value;
               setState(() {
                 _selectedRegionValue = newValue;
               });
@@ -663,42 +663,17 @@ class _MovieScreenState extends State<MovieScreen> {
       String selectedValue, ValueChanged<String> onSelected) {
     final selectedOption = options.firstWhere((e) => e.value == selectedValue,
         orElse: () => options.first);
-    bool isDefault = selectedValue == 'all' ||
-        (title == '排序' && selectedValue == 'T');
+    bool isDefault =
+        selectedValue == 'all' || (title == '排序' && selectedValue == 'T');
 
-    return GestureDetector(
+    return FilterPillHover(
+      isPC: DeviceUtils.isPC(),
+      isDefault: isDefault,
+      title: title,
+      selectedOption: selectedOption,
       onTap: () {
         _showFilterOptions(context, title, options, selectedValue, onSelected);
       },
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-        decoration: BoxDecoration(
-          color: Colors.transparent,
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Row(
-          children: [
-            Text(
-              isDefault ? title : selectedOption.label,
-              style: GoogleFonts.poppins(
-                fontSize: 13,
-                color: isDefault
-                    ? Theme.of(context).textTheme.bodySmall?.color
-                    : const Color(0xFF27AE60),
-                fontWeight: isDefault ? FontWeight.normal : FontWeight.w500,
-              ),
-            ),
-            const SizedBox(width: 4),
-            Icon(
-              Icons.arrow_drop_down,
-              size: 18,
-              color: isDefault
-                  ? Theme.of(context).textTheme.bodySmall?.color
-                  : const Color(0xFF27AE60),
-            ),
-          ],
-        ),
-      ),
     );
   }
 
@@ -712,7 +687,7 @@ class _MovieScreenState extends State<MovieScreen> {
     final rowCount = (options.length / 4).ceil();
     // 计算GridView的高度：行数 * (item高度 + 间距) + padding
     final gridHeight = rowCount * (40.0 + 10.0) - 10.0 + 32.0; // 32.0是上下padding
-    
+
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -731,7 +706,8 @@ class _MovieScreenState extends State<MovieScreen> {
             children: [
               Padding(
                 padding: const EdgeInsets.all(16),
-                child: Text(title, style: Theme.of(context).textTheme.titleLarge),
+                child:
+                    Text(title, style: Theme.of(context).textTheme.titleLarge),
               ),
               Container(
                 height: gridHeight,
@@ -748,27 +724,14 @@ class _MovieScreenState extends State<MovieScreen> {
                   itemBuilder: (context, index) {
                     final option = options[index];
                     final isSelected = option.value == selectedValue;
-                    return InkWell(
+                    return FilterOptionHover(
+                      isPC: DeviceUtils.isPC(),
+                      isSelected: isSelected,
+                      label: option.label,
                       onTap: () {
                         onSelected(option.value);
                         Navigator.pop(context);
                       },
-                      borderRadius: BorderRadius.circular(8),
-                      child: Container(
-                        alignment: Alignment.center,
-                        decoration: BoxDecoration(
-                          color: isSelected
-                              ? const Color(0xFF27AE60)
-                              : Theme.of(context).chipTheme.backgroundColor,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          option.label,
-                          style: TextStyle(
-                            color: isSelected ? Colors.white : null,
-                          ),
-                        ),
-                      ),
                     );
                   },
                 ),
@@ -803,9 +766,11 @@ class _MovieScreenState extends State<MovieScreen> {
           scrollDirection: Axis.horizontal,
           child: CapsuleTabSwitcher(
             tabs: items.map((e) => e.label).toList(),
-            selectedTab: items.firstWhere((e) => e.value == selectedValue).label,
+            selectedTab:
+                items.firstWhere((e) => e.value == selectedValue).label,
             onTabChanged: (newLabel) {
-              final newValue = items.firstWhere((e) => e.label == newLabel).value;
+              final newValue =
+                  items.firstWhere((e) => e.label == newLabel).value;
               onItemSelected(newValue);
             },
           ),
@@ -818,7 +783,8 @@ class _MovieScreenState extends State<MovieScreen> {
     final themeService = Provider.of<ThemeService>(context);
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16), // 减少顶部padding，保持底部padding与加载指示器一致
+      padding: const EdgeInsets.fromLTRB(
+          16, 8, 16, 16), // 减少顶部padding，保持底部padding与加载指示器一致
       child: Column(
         children: [
           Container(
@@ -858,3 +824,4 @@ class _MovieScreenState extends State<MovieScreen> {
     );
   }
 }
+

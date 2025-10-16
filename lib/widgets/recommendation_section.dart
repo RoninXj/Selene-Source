@@ -47,6 +47,9 @@ class _RecommendationSectionState extends State<RecommendationSection> {
   bool _showLeftScroll = false;
   bool _showRightScroll = false;
   bool _isHovered = false;
+  
+  // hover 状态
+  bool _isMoreButtonHovered = false;
 
   @override
   void initState() {
@@ -180,19 +183,41 @@ class _RecommendationSectionState extends State<RecommendationSection> {
                   },
                 ),
                 if (widget.moreText != null && widget.onMoreTap != null)
-                  TextButton(
-                    onPressed: widget.onMoreTap,
-                    style: TextButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 4),
-                      minimumSize: Size.zero,
-                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    ),
-                    child: Text(
-                      widget.moreText!,
-                      style: GoogleFonts.poppins(
-                        fontSize: 14,
-                        color: const Color(0xFF7f8c8d),
+                  MouseRegion(
+                    cursor: DeviceUtils.isPC()
+                        ? SystemMouseCursors.click
+                        : MouseCursor.defer,
+                    onEnter: DeviceUtils.isPC()
+                        ? (_) {
+                            setState(() {
+                              _isMoreButtonHovered = true;
+                            });
+                          }
+                        : null,
+                    onExit: DeviceUtils.isPC()
+                        ? (_) {
+                            setState(() {
+                              _isMoreButtonHovered = false;
+                            });
+                          }
+                        : null,
+                    child: TextButton(
+                      onPressed: widget.onMoreTap,
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 4),
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        overlayColor: Colors.transparent,
+                      ),
+                      child: Text(
+                        widget.moreText!,
+                        style: GoogleFonts.poppins(
+                          fontSize: 14,
+                          color: DeviceUtils.isPC() && _isMoreButtonHovered
+                              ? const Color(0xFF27ae60) // hover 时绿色
+                              : const Color(0xFF7f8c8d),
+                        ),
                       ),
                     ),
                   ),

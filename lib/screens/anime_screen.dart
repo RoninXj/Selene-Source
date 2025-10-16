@@ -16,13 +16,8 @@ import '../widgets/pulsing_dots_indicator.dart';
 import '../widgets/bangumi_grid.dart';
 import '../widgets/simple_tab_switcher.dart';
 import 'player_screen.dart';
-
-class SelectorOption {
-  final String label;
-  final String value;
-
-  const SelectorOption({required this.label, required this.value});
-}
+import '../widgets/filter_pill_hover.dart';
+import '../utils/device_utils.dart';
 
 class AnimeScreen extends StatefulWidget {
   const AnimeScreen({super.key});
@@ -830,39 +825,14 @@ class _AnimeScreenState extends State<AnimeScreen> {
     bool isDefault = selectedValue == 'all' ||
         (title == '排序' && selectedValue == 'T');
 
-    return GestureDetector(
+    return FilterPillHover(
+      isPC: DeviceUtils.isPC(),
+      isDefault: isDefault,
+      title: title,
+      selectedOption: selectedOption,
       onTap: () {
         _showFilterOptions(context, title, options, selectedValue, onSelected);
       },
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-        decoration: BoxDecoration(
-          color: Colors.transparent,
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Row(
-          children: [
-            Text(
-              isDefault ? title : selectedOption.label,
-              style: GoogleFonts.poppins(
-                fontSize: 13,
-                color: isDefault
-                    ? Theme.of(context).textTheme.bodySmall?.color
-                    : const Color(0xFF27AE60),
-                fontWeight: isDefault ? FontWeight.normal : FontWeight.w500,
-              ),
-            ),
-            const SizedBox(width: 4),
-            Icon(
-              Icons.arrow_drop_down,
-              size: 18,
-              color: isDefault
-                  ? Theme.of(context).textTheme.bodySmall?.color
-                  : const Color(0xFF27AE60),
-            ),
-          ],
-        ),
-      ),
     );
   }
 
@@ -912,27 +882,14 @@ class _AnimeScreenState extends State<AnimeScreen> {
                   itemBuilder: (context, index) {
                     final option = options[index];
                     final isSelected = option.value == selectedValue;
-                    return InkWell(
+                    return FilterOptionHover(
+                      isPC: DeviceUtils.isPC(),
+                      isSelected: isSelected,
+                      label: option.label,
                       onTap: () {
                         onSelected(option.value);
                         Navigator.pop(context);
                       },
-                      borderRadius: BorderRadius.circular(8),
-                      child: Container(
-                        alignment: Alignment.center,
-                        decoration: BoxDecoration(
-                          color: isSelected
-                              ? const Color(0xFF27AE60)
-                              : Theme.of(context).chipTheme.backgroundColor,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          option.label,
-                          style: TextStyle(
-                            color: isSelected ? Colors.white : null,
-                          ),
-                        ),
-                      ),
                     );
                   },
                 ),

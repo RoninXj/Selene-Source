@@ -480,6 +480,13 @@ main() {
     copy_artifacts
     show_results
     
+    # 清理临时构建目录
+    log_info "清理临时构建目录..."
+    rm -rf build
+    rm -rf build-arm64
+    rm -rf build-x86_64
+    log_success "临时构建目录已清理"
+    
     echo "=================================="
     log_success "构建完成！"
 }

@@ -79,6 +79,7 @@ class _SearchScreenState extends State<SearchScreen>
   bool _isAggregationToggleHovered = false;
   String? _hoveredFilterPill;
   bool _isYearSortHovered = false;
+  bool _isClearHistoryButtonHovered = false;
 
   late SSESearchService _searchService;
   StreamSubscription<List<SearchResult>>? _incrementalResultsSubscription;
@@ -650,21 +651,43 @@ class _SearchScreenState extends State<SearchScreen>
                       : const Color(0xFF2c3e50),
                 ),
               ),
-              TextButton(
-                onPressed: _showClearConfirmation,
-                style: TextButton.styleFrom(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  minimumSize: Size.zero,
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                ),
-                child: Text(
-                  '清空',
-                  style: GoogleFonts.poppins(
-                    fontSize: 14,
-                    color: themeService.isDarkMode
-                        ? const Color(0xFFb0b0b0)
-                        : const Color(0xFF7f8c8d),
+              MouseRegion(
+                cursor: DeviceUtils.isPC()
+                    ? SystemMouseCursors.click
+                    : MouseCursor.defer,
+                onEnter: DeviceUtils.isPC()
+                    ? (_) {
+                        setState(() {
+                          _isClearHistoryButtonHovered = true;
+                        });
+                      }
+                    : null,
+                onExit: DeviceUtils.isPC()
+                    ? (_) {
+                        setState(() {
+                          _isClearHistoryButtonHovered = false;
+                        });
+                      }
+                    : null,
+                child: TextButton(
+                  onPressed: _showClearConfirmation,
+                  style: TextButton.styleFrom(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    overlayColor: Colors.transparent,
+                  ),
+                  child: Text(
+                    '清空',
+                    style: GoogleFonts.poppins(
+                      fontSize: 14,
+                      color: DeviceUtils.isPC() && _isClearHistoryButtonHovered
+                          ? const Color(0xFFe74c3c) // hover 时红色
+                          : themeService.isDarkMode
+                              ? const Color(0xFFb0b0b0)
+                              : const Color(0xFF7f8c8d),
+                    ),
                   ),
                 ),
               ),

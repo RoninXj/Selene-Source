@@ -12,13 +12,8 @@ import '../widgets/video_menu_bottom_sheet.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../widgets/pulsing_dots_indicator.dart';
 import 'player_screen.dart';
-
-class SelectorOption {
-  final String label;
-  final String value;
-
-  const SelectorOption({required this.label, required this.value});
-}
+import '../widgets/filter_pill_hover.dart';
+import '../utils/device_utils.dart';
 
 class ShowScreen extends StatefulWidget {
   const ShowScreen({super.key});
@@ -165,7 +160,7 @@ class _ShowScreenState extends State<ShowScreen> {
   void _handleScroll() {
     if (_scrollController.hasClients) {
       final position = _scrollController.position;
-      
+
       // 如果内容不足以滚动（maxScrollExtent <= 0），直接尝试加载更多
       if (position.maxScrollExtent <= 0) {
         // 检查是否有更多数据且当前不在加载中
@@ -174,7 +169,7 @@ class _ShowScreenState extends State<ShowScreen> {
         }
         return;
       }
-      
+
       // 正常滚动情况：当滚动到距离底部50像素内时触发加载
       const double threshold = 50.0;
       if (position.pixels >= position.maxScrollExtent - threshold) {
@@ -185,12 +180,15 @@ class _ShowScreenState extends State<ShowScreen> {
 
   /// 检查内容是否不足一屏，如果是则自动加载更多
   void _checkAndLoadMoreIfNeeded() {
-    if (!_scrollController.hasClients || !_hasMore || _isLoading || _isLoadingMore) {
+    if (!_scrollController.hasClients ||
+        !_hasMore ||
+        _isLoading ||
+        _isLoadingMore) {
       return;
     }
-    
+
     final position = _scrollController.position;
-    
+
     // 如果内容不足以滚动，说明没有填满屏幕，自动加载更多
     if (position.maxScrollExtent <= 0 && _shows.isNotEmpty) {
       _loadMoreShows();
@@ -217,26 +215,23 @@ class _ShowScreenState extends State<ShowScreen> {
       String regionValue = _selectedShowRegion;
       String yearValue = _selectedShowYear;
       String platformValue = _selectedShowPlatform;
-      
+
       // 转换地区参数为中文标签
       if (regionValue != 'all') {
-        regionValue = _showRegionOptions
-            .firstWhere((e) => e.value == regionValue)
-            .label;
+        regionValue =
+            _showRegionOptions.firstWhere((e) => e.value == regionValue).label;
       }
-      
+
       // 转换年代参数为中文标签
       if (yearValue != 'all') {
-        yearValue = _showYearOptions
-            .firstWhere((e) => e.value == yearValue)
-            .label;
+        yearValue =
+            _showYearOptions.firstWhere((e) => e.value == yearValue).label;
       }
-      
+
       // 转换类型参数为中文标签
       if (categoryValue != 'all') {
-        categoryValue = _showTypeOptions
-            .firstWhere((e) => e.value == categoryValue)
-            .label;
+        categoryValue =
+            _showTypeOptions.firstWhere((e) => e.value == categoryValue).label;
       }
       // 转换平台参数为中文标签
       if (platformValue != 'all') {
@@ -244,7 +239,7 @@ class _ShowScreenState extends State<ShowScreen> {
             .firstWhere((e) => e.value == platformValue)
             .label;
       }
-      
+
       final params = DoubanRecommendsParams(
         kind: 'tv',
         category: categoryValue,
@@ -256,7 +251,7 @@ class _ShowScreenState extends State<ShowScreen> {
         pageLimit: _pageLimit,
         page: _page,
       );
-      
+
       final result = await DoubanService.fetchDoubanRecommends(
         context,
         params,
@@ -267,7 +262,7 @@ class _ShowScreenState extends State<ShowScreen> {
           // 筛选状态已改变，忽略这个过期的响应
           return;
         }
-        
+
         setState(() {
           if (result.success && result.data != null) {
             _shows.addAll(result.data!);
@@ -281,7 +276,7 @@ class _ShowScreenState extends State<ShowScreen> {
           }
           _isLoading = false;
         });
-        
+
         // 如果是刷新且内容不足一屏，尝试自动加载更多
         if (isRefresh && result.success && result.data != null) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -305,7 +300,7 @@ class _ShowScreenState extends State<ShowScreen> {
           // 筛选状态已改变，忽略这个过期的响应
           return;
         }
-        
+
         setState(() {
           if (result.success && result.data != null) {
             _shows.addAll(result.data!);
@@ -319,7 +314,7 @@ class _ShowScreenState extends State<ShowScreen> {
           }
           _isLoading = false;
         });
-        
+
         // 如果是刷新且内容不足一屏，尝试自动加载更多
         if (isRefresh && result.success && result.data != null) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -346,26 +341,23 @@ class _ShowScreenState extends State<ShowScreen> {
       String regionValue = _selectedShowRegion;
       String yearValue = _selectedShowYear;
       String platformValue = _selectedShowPlatform;
-      
+
       // 转换地区参数为中文标签
       if (regionValue != 'all') {
-        regionValue = _showRegionOptions
-            .firstWhere((e) => e.value == regionValue)
-            .label;
+        regionValue =
+            _showRegionOptions.firstWhere((e) => e.value == regionValue).label;
       }
-      
+
       // 转换年代参数为中文标签
       if (yearValue != 'all') {
-        yearValue = _showYearOptions
-            .firstWhere((e) => e.value == yearValue)
-            .label;
+        yearValue =
+            _showYearOptions.firstWhere((e) => e.value == yearValue).label;
       }
-      
+
       // 转换类型参数为中文标签
       if (categoryValue != 'all') {
-        categoryValue = _showTypeOptions
-            .firstWhere((e) => e.value == categoryValue)
-            .label;
+        categoryValue =
+            _showTypeOptions.firstWhere((e) => e.value == categoryValue).label;
       }
       // 转换平台参数为中文标签
       if (platformValue != 'all') {
@@ -373,7 +365,7 @@ class _ShowScreenState extends State<ShowScreen> {
             .firstWhere((e) => e.value == platformValue)
             .label;
       }
-      
+
       final params = DoubanRecommendsParams(
         kind: 'tv',
         category: categoryValue,
@@ -385,7 +377,7 @@ class _ShowScreenState extends State<ShowScreen> {
         pageLimit: _pageLimit,
         page: _page,
       );
-      
+
       final result = await DoubanService.fetchDoubanRecommends(
         context,
         params,
@@ -396,7 +388,7 @@ class _ShowScreenState extends State<ShowScreen> {
           // 筛选状态已改变，忽略这个过期的响应
           return;
         }
-        
+
         setState(() {
           if (result.success && result.data != null) {
             _shows.addAll(result.data!);
@@ -427,7 +419,7 @@ class _ShowScreenState extends State<ShowScreen> {
           // 筛选状态已改变，忽略这个过期的响应
           return;
         }
-        
+
         setState(() {
           if (result.success && result.data != null) {
             _shows.addAll(result.data!);
@@ -528,14 +520,14 @@ class _ShowScreenState extends State<ShowScreen> {
   Widget _buildHeader() {
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 20, 16, 8),
-              child: Column(
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '综艺',
-                    style: GoogleFonts.poppins(
+        children: [
+          Text(
+            '综艺',
+            style: GoogleFonts.poppins(
               fontSize: 28,
-                      fontWeight: FontWeight.w600,
+              fontWeight: FontWeight.w600,
               color: Theme.of(context).textTheme.titleLarge?.color,
             ),
           ),
@@ -562,16 +554,17 @@ class _ShowScreenState extends State<ShowScreen> {
     return Container(
       width: double.infinity, // 设置为100%宽度
       margin: const EdgeInsets.all(16), // 恢复原来的margin设置
-      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16), // 恢复原来的padding设置
-                    decoration: BoxDecoration(
+      padding: const EdgeInsets.symmetric(
+          vertical: 12, horizontal: 16), // 恢复原来的padding设置
+      decoration: BoxDecoration(
         color: themeService.isDarkMode
             ? Colors.white.withOpacity(0.1)
             : Colors.white.withOpacity(0.8),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
           _buildFilterRow(
             '分类',
             _showPrimaryOptions,
@@ -590,7 +583,7 @@ class _ShowScreenState extends State<ShowScreen> {
               _fetchShows(isRefresh: true);
             },
           ),
-                          const SizedBox(height: 16),
+          const SizedBox(height: 16),
           // 使用固定高度的容器来避免高度跳跃
           SizedBox(
             height: 66, // 增加高度以避免Column底部溢出
@@ -607,10 +600,10 @@ class _ShowScreenState extends State<ShowScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-                          Text(
+        Text(
           '筛选',
-                            style: GoogleFonts.poppins(
-                              fontSize: 14,
+          style: GoogleFonts.poppins(
+            fontSize: 14,
             fontWeight: FontWeight.w500,
             color: Theme.of(context).textTheme.bodyMedium?.color,
           ),
@@ -621,31 +614,36 @@ class _ShowScreenState extends State<ShowScreen> {
             scrollDirection: Axis.horizontal,
             child: Row(
               children: [
-                _buildFilterPill('类型', _showTypeOptions, _selectedShowType, (v) {
+                _buildFilterPill('类型', _showTypeOptions, _selectedShowType,
+                    (v) {
                   setState(() => _selectedShowType = v);
                   _fetchShows(isRefresh: true);
                 }),
-                _buildFilterPill('地区', _showRegionOptions, _selectedShowRegion, (v) {
+                _buildFilterPill('地区', _showRegionOptions, _selectedShowRegion,
+                    (v) {
                   setState(() => _selectedShowRegion = v);
                   _fetchShows(isRefresh: true);
                 }),
-                _buildFilterPill('年代', _showYearOptions, _selectedShowYear, (v) {
+                _buildFilterPill('年代', _showYearOptions, _selectedShowYear,
+                    (v) {
                   setState(() => _selectedShowYear = v);
                   _fetchShows(isRefresh: true);
                 }),
-                _buildFilterPill('平台', _showPlatformOptions, _selectedShowPlatform, (v) {
+                _buildFilterPill(
+                    '平台', _showPlatformOptions, _selectedShowPlatform, (v) {
                   setState(() => _selectedShowPlatform = v);
                   _fetchShows(isRefresh: true);
                 }),
-                _buildFilterPill('排序', _showSortOptions, _selectedShowSort, (v) {
+                _buildFilterPill('排序', _showSortOptions, _selectedShowSort,
+                    (v) {
                   setState(() => _selectedShowSort = v);
                   _fetchShows(isRefresh: true);
                 }),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -666,9 +664,13 @@ class _ShowScreenState extends State<ShowScreen> {
           scrollDirection: Axis.horizontal,
           child: CapsuleTabSwitcher(
             tabs: _showSecondaryOptions.map((e) => e.label).toList(),
-            selectedTab: _showSecondaryOptions.firstWhere((e) => e.value == _selectedRegionValue).label,
+            selectedTab: _showSecondaryOptions
+                .firstWhere((e) => e.value == _selectedRegionValue)
+                .label,
             onTabChanged: (newLabel) {
-              final newValue = _showSecondaryOptions.firstWhere((e) => e.label == newLabel).value;
+              final newValue = _showSecondaryOptions
+                  .firstWhere((e) => e.label == newLabel)
+                  .value;
               setState(() {
                 _selectedRegionValue = newValue;
               });
@@ -684,42 +686,17 @@ class _ShowScreenState extends State<ShowScreen> {
       String selectedValue, ValueChanged<String> onSelected) {
     final selectedOption = options.firstWhere((e) => e.value == selectedValue,
         orElse: () => options.first);
-    bool isDefault = selectedValue == 'all' ||
-        (title == '排序' && selectedValue == 'T');
+    bool isDefault =
+        selectedValue == 'all' || (title == '排序' && selectedValue == 'T');
 
-    return GestureDetector(
+    return FilterPillHover(
+      isPC: DeviceUtils.isPC(),
+      isDefault: isDefault,
+      title: title,
+      selectedOption: selectedOption,
       onTap: () {
         _showFilterOptions(context, title, options, selectedValue, onSelected);
       },
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-        decoration: BoxDecoration(
-          color: Colors.transparent,
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Row(
-          children: [
-            Text(
-              isDefault ? title : selectedOption.label,
-              style: GoogleFonts.poppins(
-                fontSize: 13,
-                color: isDefault
-                    ? Theme.of(context).textTheme.bodySmall?.color
-                    : const Color(0xFF27AE60),
-                fontWeight: isDefault ? FontWeight.normal : FontWeight.w500,
-              ),
-            ),
-            const SizedBox(width: 4),
-            Icon(
-              Icons.arrow_drop_down,
-              size: 18,
-              color: isDefault
-                  ? Theme.of(context).textTheme.bodySmall?.color
-                  : const Color(0xFF27AE60),
-            ),
-          ],
-        ),
-      ),
     );
   }
 
@@ -733,7 +710,7 @@ class _ShowScreenState extends State<ShowScreen> {
     final rowCount = (options.length / 4).ceil();
     // 计算GridView的高度：行数 * (item高度 + 间距) + padding
     final gridHeight = rowCount * (40.0 + 10.0) - 10.0 + 32.0; // 32.0是上下padding
-    
+
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -752,7 +729,8 @@ class _ShowScreenState extends State<ShowScreen> {
             children: [
               Padding(
                 padding: const EdgeInsets.all(16),
-                child: Text(title, style: Theme.of(context).textTheme.titleLarge),
+                child:
+                    Text(title, style: Theme.of(context).textTheme.titleLarge),
               ),
               Container(
                 height: gridHeight,
@@ -769,27 +747,14 @@ class _ShowScreenState extends State<ShowScreen> {
                   itemBuilder: (context, index) {
                     final option = options[index];
                     final isSelected = option.value == selectedValue;
-                    return InkWell(
+                    return FilterOptionHover(
+                      isPC: DeviceUtils.isPC(),
+                      isSelected: isSelected,
+                      label: option.label,
                       onTap: () {
                         onSelected(option.value);
                         Navigator.pop(context);
                       },
-                      borderRadius: BorderRadius.circular(8),
-                      child: Container(
-                        alignment: Alignment.center,
-                        decoration: BoxDecoration(
-                          color: isSelected
-                              ? const Color(0xFF27AE60)
-                              : Theme.of(context).chipTheme.backgroundColor,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          option.label,
-                          style: TextStyle(
-                            color: isSelected ? Colors.white : null,
-                          ),
-                        ),
-                      ),
                     );
                   },
                 ),
@@ -824,9 +789,11 @@ class _ShowScreenState extends State<ShowScreen> {
           scrollDirection: Axis.horizontal,
           child: CapsuleTabSwitcher(
             tabs: items.map((e) => e.label).toList(),
-            selectedTab: items.firstWhere((e) => e.value == selectedValue).label,
+            selectedTab:
+                items.firstWhere((e) => e.value == selectedValue).label,
             onTabChanged: (newLabel) {
-              final newValue = items.firstWhere((e) => e.label == newLabel).value;
+              final newValue =
+                  items.firstWhere((e) => e.label == newLabel).value;
               onItemSelected(newValue);
             },
           ),
@@ -839,7 +806,8 @@ class _ShowScreenState extends State<ShowScreen> {
     final themeService = Provider.of<ThemeService>(context);
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16), // 减少顶部padding，保持底部padding与加载指示器一致
+      padding: const EdgeInsets.fromLTRB(
+          16, 8, 16, 16), // 减少顶部padding，保持底部padding与加载指示器一致
       child: Column(
         children: [
           Container(
