@@ -792,7 +792,7 @@ class _CustomMediaKitControlsState extends State<CustomMediaKitControls> {
         buttonPosition.dx + (buttonSize.width / 2) - (menuWidth / 2);
     // 计算垂直位置：按钮顶部 - 弹框高度 - 间距
     final menuTop =
-        buttonPosition.dy - menuHeight - (effectiveFullscreen ? 2 : 24);
+        buttonPosition.dy - menuHeight - (_isFullscreen ? 2 : 36);
 
     return Positioned(
       left: menuLeft,

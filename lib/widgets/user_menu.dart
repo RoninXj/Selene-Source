@@ -2,10 +2,13 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:package_info_plus/package_info_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../services/user_data_service.dart';
 import '../screens/login_screen.dart';
 import '../services/douban_cache_service.dart';
 import '../services/page_cache_service.dart';
+import '../utils/device_utils.dart';
 
 class UserMenu extends StatefulWidget {
   final bool isDarkMode;
@@ -27,11 +30,22 @@ class _UserMenuState extends State<UserMenu> {
   String _doubanDataSource = '直连';
   String _doubanImageSource = '直连';
   String _m3u8ProxyUrl = '';
+  String _version = '';
 
   @override
   void initState() {
     super.initState();
     _loadUserInfo();
+    _loadVersion();
+  }
+
+  Future<void> _loadVersion() async {
+    final packageInfo = await PackageInfo.fromPlatform();
+    if (mounted) {
+      setState(() {
+        _version = packageInfo.version;
+      });
+    }
   }
 
   Future<void> _loadUserInfo() async {
@@ -672,10 +686,6 @@ class _UserMenuState extends State<UserMenu> {
                       color: Colors.transparent,
                       child: InkWell(
                         onTap: _handleLogout,
-                        borderRadius: const BorderRadius.only(
-                          bottomLeft: Radius.circular(12),
-                          bottomRight: Radius.circular(12),
-                        ),
                         child: Container(
                           padding: const EdgeInsets.symmetric(
                             horizontal: 20,
@@ -683,10 +693,10 @@ class _UserMenuState extends State<UserMenu> {
                           ),
                           child: Row(
                             children: [
-                              Icon(
+                              const Icon(
                                 LucideIcons.logOut,
                                 size: 20,
-                                color: const Color(0xFFef4444),
+                                color: Color(0xFFef4444),
                               ),
                               const SizedBox(width: 12),
                               Text(
@@ -698,6 +708,47 @@ class _UserMenuState extends State<UserMenu> {
                                 ),
                               ),
                             ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    // 分割线
+                    Container(
+                      height: 1,
+                      color: widget.isDarkMode
+                          ? const Color(0xFF374151)
+                          : const Color(0xFFe5e7eb),
+                    ),
+                    // 版本号
+                    MouseRegion(
+                      cursor: DeviceUtils.isPC()
+                          ? SystemMouseCursors.click
+                          : MouseCursor.defer,
+                      child: GestureDetector(
+                        onTap: () async {
+                          final url = Uri.parse(
+                              'https://github.com/MoonTechLab/Selene');
+                          if (await canLaunchUrl(url)) {
+                            await launchUrl(url,
+                                mode: LaunchMode.externalApplication);
+                          }
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 20,
+                            vertical: 12,
+                          ),
+                          child: Center(
+                            child: Text(
+                              _version.isEmpty ? 'v1.4.3' : 'v$_version',
+                              style: GoogleFonts.poppins(
+                                fontSize: 14,
+                                color: widget.isDarkMode
+                                    ? const Color(0xFF9ca3af)
+                                    : const Color(0xFF6b7280),
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
                           ),
                         ),
                       ),

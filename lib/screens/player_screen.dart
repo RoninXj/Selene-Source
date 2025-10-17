@@ -125,7 +125,7 @@ class _PlayerScreenState extends State<PlayerScreen>
 
   // 网页全屏状态
   bool _isWebFullscreen = false;
-  
+
   // 播放器的 GlobalKey，用于保持播放器状态
   final GlobalKey _playerKey = GlobalKey();
 
@@ -2626,7 +2626,7 @@ class _PlayerScreenState extends State<PlayerScreen>
   /// 构建播放器层（使用 Positioned 控制位置和大小）
   Widget _buildPlayerLayer(ThemeData theme) {
     final statusBarHeight = MediaQuery.maybeOf(context)?.padding.top ?? 0;
-    final macOSPadding = DeviceUtils.isMacOS() ? 24.0 : 0.0;
+    final macOSPadding = DeviceUtils.isMacOS() ? 32.0 : 0.0;
     final topOffset = statusBarHeight + macOSPadding;
 
     if (_isWebFullscreen) {
@@ -2713,7 +2713,7 @@ class _PlayerScreenState extends State<PlayerScreen>
   /// 构建手机模式布局（不包含播放器）
   Widget _buildPhoneLayout(ThemeData theme) {
     final statusBarHeight = MediaQuery.maybeOf(context)?.padding.top ?? 0;
-    final macOSPadding = DeviceUtils.isMacOS() ? 24.0 : 0.0;
+    final macOSPadding = DeviceUtils.isMacOS() ? 32.0 : 0.0;
     final screenWidth = MediaQuery.of(context).size.width;
     final playerHeight = screenWidth / (16 / 9);
 
@@ -2736,7 +2736,7 @@ class _PlayerScreenState extends State<PlayerScreen>
   Widget _buildPortraitTabletLayout(ThemeData theme) {
     final screenHeight = MediaQuery.of(context).size.height;
     final statusBarHeight = MediaQuery.of(context).padding.top;
-    final macOSPadding = DeviceUtils.isMacOS() ? 24.0 : 0.0;
+    final macOSPadding = DeviceUtils.isMacOS() ? 32.0 : 0.0;
     final playerHeight = (screenHeight - statusBarHeight - macOSPadding) * 0.5;
 
     return Column(
@@ -2757,7 +2757,7 @@ class _PlayerScreenState extends State<PlayerScreen>
   /// 构建平板横屏模式布局（不包含播放器）
   Widget _buildTabletLandscapeLayout(ThemeData theme) {
     final statusBarHeight = MediaQuery.maybeOf(context)?.padding.top ?? 0;
-    final macOSPadding = DeviceUtils.isMacOS() ? 24.0 : 0.0;
+    final macOSPadding = DeviceUtils.isMacOS() ? 32.0 : 0.0;
     final screenWidth = MediaQuery.of(context).size.width;
     final leftWidth = screenWidth * 0.65;
     final playerHeight = leftWidth / (16 / 9);
