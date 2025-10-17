@@ -10,6 +10,7 @@ import 'package:fvp/fvp.dart' as fvp;
 import 'dart:io' show Platform;
 import 'package:macos_window_utils/macos_window_utils.dart';
 import 'package:media_kit/media_kit.dart';
+import 'package:bitsdojo_window/bitsdojo_window.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -37,6 +38,20 @@ void main() async {
   cacheService.startPeriodicCleanup();
   
   runApp(const SeleneApp());
+  
+  // 初始化 Windows 窗口配置
+  if (Platform.isWindows) {
+    doWhenWindowReady(() {
+      final win = appWindow;
+      const initialSize = Size(1280, 720);
+      const minSize = Size(1024, 768);
+      win.minSize = minSize;
+      win.size = initialSize;
+      win.alignment = Alignment.center;
+      win.title = "Selene";
+      win.show();
+    });
+  }
 }
 
 class SeleneApp extends StatelessWidget {

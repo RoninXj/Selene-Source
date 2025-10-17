@@ -5,6 +5,8 @@ import 'package:provider/provider.dart';
 import '../services/theme_service.dart';
 import '../utils/device_utils.dart';
 import 'user_menu.dart';
+import 'dart:io' show Platform;
+import 'windows_title_bar.dart';
 
 class MainLayout extends StatefulWidget {
   final Widget content;
@@ -109,6 +111,8 @@ class _MainLayoutState extends State<MainLayout> {
                         ),
                         child: Column(
                           children: [
+                            // Windows 自定义标题栏
+                            if (Platform.isWindows) const WindowsTitleBar(),
                             // 固定 Header
                             _buildHeader(context, themeService),
                             // 主要内容区域
@@ -145,9 +149,12 @@ class _MainLayoutState extends State<MainLayout> {
     final isTablet = DeviceUtils.isTablet(context);
 
     // macOS 下需要额外的顶部 padding 来避免与透明标题栏重叠
+    // Windows 下不需要额外 padding，因为自定义标题栏已经占据了空间
     final topPadding = DeviceUtils.isMacOS()
         ? MediaQuery.of(context).padding.top + 32
-        : MediaQuery.of(context).padding.top + 8;
+        : Platform.isWindows
+            ? 8.0
+            : MediaQuery.of(context).padding.top + 8;
 
     return Container(
       padding: EdgeInsets.only(
