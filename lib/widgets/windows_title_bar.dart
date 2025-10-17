@@ -5,10 +5,12 @@ import '../services/theme_service.dart';
 
 class WindowsTitleBar extends StatefulWidget {
   final bool forceBlack;
+  final Color? customBackgroundColor;
   
   const WindowsTitleBar({
     super.key,
     this.forceBlack = false,
+    this.customBackgroundColor,
   });
 
   @override
@@ -23,11 +25,14 @@ class _WindowsTitleBarState extends State<WindowsTitleBar> {
     return Consumer<ThemeService>(
       builder: (context, themeService, child) {
         final isDark = themeService.isDarkMode;
-        final backgroundColor = widget.forceBlack
-            ? Colors.transparent
-            : (isDark 
-                ? const Color(0xFF1e1e1e).withOpacity(0.9)
-                : Colors.white.withOpacity(0.8));
+        
+        // 优先使用自定义背景色，其次使用 forceBlack，最后使用默认颜色
+        final backgroundColor = widget.customBackgroundColor ??
+            (widget.forceBlack
+                ? Colors.transparent
+                : (isDark 
+                    ? const Color(0xFF1e1e1e).withValues(alpha: 0.9)
+                    : Colors.white.withValues(alpha: 0.8)));
         
         return Container(
           height: 40,
@@ -106,7 +111,7 @@ class _WindowsTitleBarState extends State<WindowsTitleBar> {
             color: color,
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.2),
+                color: Colors.black.withValues(alpha: 0.2),
                 blurRadius: 1,
                 offset: const Offset(0, 0.5),
               ),
@@ -116,7 +121,7 @@ class _WindowsTitleBarState extends State<WindowsTitleBar> {
               ? Icon(
                   icon,
                   size: iconSize,
-                  color: Colors.black.withOpacity(0.7),
+                  color: Colors.black.withValues(alpha: 0.7),
                 )
               : null,
         ),

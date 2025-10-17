@@ -211,8 +211,11 @@ class _LoginScreenState extends State<LoginScreen> {
         ),
         child: Column(
           children: [
-            // Windows 自定义标题栏
-            if (Platform.isWindows) const WindowsTitleBar(),
+            // Windows 自定义标题栏（使用登录页背景色）
+            if (Platform.isWindows)
+              const WindowsTitleBar(
+                customBackgroundColor: Color(0xFFe6f3fb), // 使用渐变的顶部颜色
+              ),
             // 主要内容
             Expanded(
               child: SafeArea(
