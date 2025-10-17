@@ -229,7 +229,7 @@ build_windows_installer() {
     fi
     
     # 编译安装程序
-    "$ISCC_PATH" /DMyAppVersion="$APP_VERSION" windows/installer.iss
+    "$ISCC_PATH" "windows/installer.iss"
     
     if [ $? -eq 0 ]; then
         log_success "Windows 安装包构建完成"
