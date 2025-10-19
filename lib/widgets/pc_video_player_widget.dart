@@ -51,6 +51,7 @@ class PcVideoPlayerWidgetController {
 
   /// 动态更新视频数据源
   Future<void> updateDataSource(String url, {Duration? startAt}) async {
+    startAt ??= const Duration();
     await _state.updateDataSource(url, startAt: startAt);
   }
 

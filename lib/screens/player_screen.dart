@@ -309,6 +309,7 @@ class _PlayerScreenState extends State<PlayerScreen>
     // 将 playTime 转换为 Duration 并传递给 updateVideoUrl
     final startAt = playTime > 0 ? Duration(seconds: playTime) : null;
     updateVideoUrl(currentDetail!.episodes[targetIndex], startAt: startAt);
+    _scrollToCurrentEpisode();
   }
 
   void setInfosByDetail(SearchResult detail) {
@@ -748,11 +749,7 @@ class _PlayerScreenState extends State<PlayerScreen>
 
     // 播放下一集
     final nextIndex = currentEpisodeIndex + 1;
-    setState(() {
-      currentEpisodeIndex = nextIndex;
-    });
-    updateVideoUrl(currentDetail!.episodes[nextIndex], startAt: Duration.zero);
-    _scrollToCurrentEpisode();
+    startPlay(nextIndex, 0);
   }
 
   /// 处理视频播放完成
@@ -776,11 +773,7 @@ class _PlayerScreenState extends State<PlayerScreen>
 
     // 自动播放下一集
     final nextIndex = currentEpisodeIndex + 1;
-    setState(() {
-      currentEpisodeIndex = nextIndex;
-    });
-    updateVideoUrl(currentDetail!.episodes[nextIndex], startAt: Duration.zero);
-    _scrollToCurrentEpisode();
+    startPlay(nextIndex, 0);
   }
 
   /// 显示Toast消息
@@ -1642,7 +1635,6 @@ class _PlayerScreenState extends State<PlayerScreen>
                     final episodeIndex = _isEpisodesReversed
                         ? currentDetail!.episodes.length - 1 - index
                         : index;
-                    final episode = currentDetail!.episodes[episodeIndex];
                     final isCurrentEpisode =
                         episodeIndex == currentEpisodeIndex;
 
@@ -1678,11 +1670,7 @@ class _PlayerScreenState extends State<PlayerScreen>
                                   // 集数切换前保存进度
                                   _saveProgress(force: true, scene: '选集列表点击');
 
-                                  setState(() {
-                                    currentEpisodeIndex = episodeIndex;
-                                  });
-                                  updateVideoUrl(episode);
-                                  _scrollToCurrentEpisode();
+                                  startPlay(episodeIndex, 0);
                                 },
                         ),
                       ),
@@ -1758,11 +1746,7 @@ class _PlayerScreenState extends State<PlayerScreen>
                             });
                           });
                           _saveProgress(force: true, scene: '选集面板点击');
-                          this.setState(() {
-                            currentEpisodeIndex = index;
-                          });
-                          updateVideoUrl(currentDetail!.episodes[index]);
-                          _scrollToCurrentEpisode();
+                          startPlay(index, 0);
                         },
                         onToggleOrder: () {
                           setState(() {
@@ -1813,11 +1797,7 @@ class _PlayerScreenState extends State<PlayerScreen>
                     });
                   });
                   _saveProgress(force: true, scene: '选集面板点击');
-                  this.setState(() {
-                    currentEpisodeIndex = index;
-                  });
-                  updateVideoUrl(currentDetail!.episodes[index]);
-                  _scrollToCurrentEpisode();
+                  startPlay(index, 0);
                 },
                 onToggleOrder: () {
                   setState(() {

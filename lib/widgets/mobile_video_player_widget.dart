@@ -52,6 +52,7 @@ class MobileVideoPlayerWidgetController {
       url,
       videoFormat: BetterPlayerVideoFormat.hls,
     );
+    startAt ??= const Duration();
     await _state.updateDataSource(dataSource, startAt: startAt);
   }
 

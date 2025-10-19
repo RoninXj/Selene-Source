@@ -13,6 +13,7 @@ class DLNAPlayerController {
 
   /// 更新视频 URL
   void updateVideoUrl(String url, String title, {Duration? startAt}) {
+    startAt ??= const Duration();
     _state.updateVideoUrl(url, title, startAt: startAt);
   }
 
