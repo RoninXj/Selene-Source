@@ -451,6 +451,12 @@ main() {
                 BUILD_WINDOWS=false
                 shift
                 ;;
+            --apple-only)
+                BUILD_ANDROID=false
+                BUILD_WINDOWS=false
+                BUILD_WINDOWS_ARM64=false
+                shift
+                ;;
             --windows-only)
                 BUILD_ANDROID=false
                 BUILD_IOS=false
@@ -470,6 +476,7 @@ main() {
                 echo "  --macos-arm64-only  只构建 macOS ARM64 版本"
                 echo "  --macos-x86_64-only 只构建 macOS x86_64 版本"
                 echo "  --macos-only        构建 macOS 所有架构"
+                echo "  --apple-only        构建所有 Apple 平台版本（iOS 和 macOS）"
                 echo "  --windows-only      只构建 Windows 版本"
                 echo "  --sequential        顺序构建（默认为并行构建）"
                 echo "  --help              显示此帮助信息"
