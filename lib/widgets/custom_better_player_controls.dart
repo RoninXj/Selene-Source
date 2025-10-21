@@ -679,6 +679,56 @@ class _CustomBetterPlayerControlsState
               ],
             ),
           ),
+          // 顶部渐变背景 - 从上往下（半透明黑色到完全透明）
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: AnimatedOpacity(
+              opacity: (_controlsVisible && !_isLocked) ? 1.0 : 0.0,
+              duration: const Duration(milliseconds: 200),
+              child: IgnorePointer(
+                child: Container(
+                  height: isFullscreen ? 120 : 80,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        Colors.black.withValues(alpha: 0.6),
+                        Colors.transparent,
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          // 底部渐变背景 - 从下往上（半透明黑色到完全透明）
+          Positioned(
+            bottom: 0,
+            left: 0,
+            right: 0,
+            child: AnimatedOpacity(
+              opacity: (_controlsVisible && !_isLocked) ? 1.0 : 0.0,
+              duration: const Duration(milliseconds: 200),
+              child: IgnorePointer(
+                child: Container(
+                  height: isFullscreen ? 140 : 100,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.bottomCenter,
+                      end: Alignment.topCenter,
+                      colors: [
+                        Colors.black.withValues(alpha: 0.6),
+                        Colors.transparent,
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
           // 长按倍速提示
           if (_isLongPressing && !_isLocked)
             Positioned(
