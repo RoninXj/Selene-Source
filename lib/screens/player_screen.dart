@@ -9,6 +9,7 @@ import '../services/api_service.dart';
 import '../services/m3u8_service.dart';
 import '../services/douban_service.dart';
 import '../services/user_data_service.dart';
+import '../services/search_service.dart';
 import '../models/search_result.dart';
 import '../models/douban_movie.dart';
 import '../models/play_record.dart';
@@ -2476,7 +2477,17 @@ class _PlayerScreenState extends State<PlayerScreen>
 
   /// 搜索视频源数据（带过滤）
   Future<List<SearchResult>> fetchSourcesData(String query) async {
-    final results = await ApiService.fetchSourcesData(query);
+    // 检查是否启用本地搜索
+    final isLocalSearch = await UserDataService.getLocalSearch();
+    
+    List<SearchResult> results;
+    if (isLocalSearch) {
+      // 使用本地搜索
+      results = await SearchService.searchSync(query);
+    } else {
+      // 使用服务器搜索
+      results = await ApiService.fetchSourcesData(query);
+    }
 
     // 直接在这里展开过滤逻辑
     return results.where((result) {

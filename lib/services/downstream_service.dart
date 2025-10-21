@@ -1,9 +1,11 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:gbk_codec/gbk_codec.dart';
 import '../models/search_resource.dart';
 import '../models/search_result.dart';
 import 'content_filter_service.dart';
+import 'local_search_cache_service.dart';
 
 /// 分页搜索结果
 class SearchPageResult {
@@ -115,6 +117,21 @@ class DownstreamService {
     required int page,
     required String url,
   }) async {
+    // 先查缓存
+    final cache = LocalSearchCacheService();
+    final cached = cache.getCachedSearchPage(resource.key, query, page);
+
+    if (cached != null) {
+      if (cached.status == CachedPageStatus.ok) {
+        return SearchPageResult(
+          results: cached.data.cast<SearchResult>(),
+          pageCount: cached.pageCount ?? 1,
+        );
+      } else {
+        return SearchPageResult(results: [], pageCount: 1);
+      }
+    }
+
     try {
       final response = await http.get(
         Uri.parse(url),
@@ -123,6 +140,18 @@ class DownstreamService {
               'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
         },
       ).timeout(const Duration(seconds: 8));
+
+      // 检查 403 状态码，缓存 forbidden
+      if (response.statusCode == 403) {
+        cache.setCachedSearchPage(
+          resource.key,
+          query,
+          page,
+          CachedPageStatus.forbidden,
+          [],
+        );
+        return SearchPageResult(results: [], pageCount: 1);
+      }
 
       if (!response.statusCode.toString().startsWith('2')) {
         return SearchPageResult(results: [], pageCount: 1);
@@ -238,8 +267,30 @@ class DownstreamService {
 
       final pageCount = page == 1 ? (data['pagecount'] as int? ?? 1) : 1;
 
+      // 缓存成功的搜索结果
+      cache.setCachedSearchPage(
+        resource.key,
+        query,
+        page,
+        CachedPageStatus.ok,
+        results,
+        pageCount: page == 1 ? pageCount : null,
+      );
+
       return SearchPageResult(results: results, pageCount: pageCount);
+    } on TimeoutException {
+      // 只有超时才缓存 timeout 状态
+      cache.setCachedSearchPage(
+        resource.key,
+        query,
+        page,
+        CachedPageStatus.timeout,
+        [],
+      );
+
+      return SearchPageResult(results: [], pageCount: 1);
     } catch (e) {
+      // 其他异常不缓存，直接返回空结果
       return SearchPageResult(results: [], pageCount: 1);
     }
   }
