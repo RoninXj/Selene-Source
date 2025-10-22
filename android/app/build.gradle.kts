@@ -33,27 +33,31 @@ android {
         versionName = flutter.versionName
     }
 
+    val keystorePropertiesFile = rootProject.file("key.properties")
+    val hasSigningConfig = keystorePropertiesFile.exists()
+
     signingConfigs {
-        create("release") {
-            val keystorePropertiesFile = rootProject.file("gradle.properties")
-            if (keystorePropertiesFile.exists()) {
+        if (hasSigningConfig) {
+            create("release") {
                 val properties = Properties()
                 properties.load(FileInputStream(keystorePropertiesFile))
                 
-                val storeFilePath = properties.getProperty("releaseStoreFile")
-                if (storeFilePath != null) {
-                    storeFile = file(storeFilePath)
-                }
-                storePassword = properties.getProperty("releaseStorePassword")
-                keyAlias = properties.getProperty("releaseKeyAlias")
-                keyPassword = properties.getProperty("releaseKeyPassword")
+                storeFile = file(properties.getProperty("storeFile")!!)
+                storePassword = properties.getProperty("storePassword")
+                keyAlias = properties.getProperty("keyAlias")
+                keyPassword = properties.getProperty("keyPassword")
             }
         }
     }
 
     buildTypes {
         release {
-            signingConfig = signingConfigs.getByName("release")
+            if (hasSigningConfig) {
+                signingConfig = signingConfigs.getByName("release")
+            } else {
+                // Fallback to debug signing for local development
+                signingConfig = signingConfigs.getByName("debug")
+            }
             
             // Enable R8 code shrinking, obfuscation, and optimization
             isMinifyEnabled = true
