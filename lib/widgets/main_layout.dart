@@ -15,7 +15,7 @@ class MainLayout extends StatefulWidget {
   final String selectedTopTab;
   final Function(String) onTopTabChanged;
   final bool isSearchMode;
-  final Function(bool)? onSearchModeChanged;
+  final VoidCallback? onSearchTap;
   final VoidCallback? onHomeTap;
   final TextEditingController? searchController;
   final FocusNode? searchFocusNode;
@@ -23,6 +23,7 @@ class MainLayout extends StatefulWidget {
   final Function(String)? onSearchQueryChanged;
   final Function(String)? onSearchSubmitted;
   final VoidCallback? onClearSearch;
+  final bool showBottomNav;
 
   const MainLayout({
     super.key,
@@ -32,7 +33,7 @@ class MainLayout extends StatefulWidget {
     required this.selectedTopTab,
     required this.onTopTabChanged,
     this.isSearchMode = false,
-    this.onSearchModeChanged,
+    this.onSearchTap,
     this.onHomeTap,
     this.searchController,
     this.searchFocusNode,
@@ -40,6 +41,7 @@ class MainLayout extends StatefulWidget {
     this.onSearchQueryChanged,
     this.onSearchSubmitted,
     this.onClearSearch,
+    this.showBottomNav = true,
   });
 
   @override
@@ -130,8 +132,9 @@ class _MainLayoutState extends State<MainLayout> {
                         ),
                       ),
                     ),
-                    // 底部导航栏
-                    _buildBottomNavBar(themeService),
+                    // 底部导航栏（可选）
+                    if (widget.showBottomNav)
+                      _buildBottomNavBar(themeService),
                   ],
                 ),
                 // 用户菜单覆盖层 - 现在会覆盖整个屏幕包括navbar
@@ -231,10 +234,7 @@ class _MainLayoutState extends State<MainLayout> {
                     _isSearchButtonPressed = true;
                   });
 
-                  final callback = widget.onSearchModeChanged;
-                  if (callback != null) {
-                    callback(!widget.isSearchMode);
-                  }
+                  widget.onSearchTap?.call();
 
                   // 延迟重置按钮状态，防止快速重复点击
                   Future.delayed(const Duration(milliseconds: 300), () {
@@ -588,10 +588,7 @@ class _MainLayoutState extends State<MainLayout> {
                     : null,
                 child: GestureDetector(
                   onTap: () {
-                    final callback = widget.onSearchModeChanged;
-                    if (callback != null) {
-                      callback(false);
-                    }
+                    Navigator.pop(context);
                   },
                   behavior: HitTestBehavior.opaque,
                   child: Container(

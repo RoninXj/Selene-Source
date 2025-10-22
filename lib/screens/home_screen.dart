@@ -33,13 +33,6 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int _currentBottomNavIndex = 0;
   String _selectedTopTab = '首页';
-  bool _isSearchMode = false;
-  
-  // 搜索相关状态
-  final TextEditingController _searchController = TextEditingController();
-  final FocusNode _searchFocusNode = FocusNode();
-  String _searchQuery = '';
-  Function(String)? _performSearchCallback;
 
   @override
   void initState() {
@@ -49,20 +42,20 @@ class _HomeScreenState extends State<HomeScreen> {
     // 检查应用更新
     _checkForUpdates();
   }
-  
+
   /// 检查应用更新
   void _checkForUpdates() async {
     // 延迟3秒后检查更新，避免影响页面加载
     await Future.delayed(const Duration(seconds: 3));
-    
+
     try {
       final versionInfo = await VersionService.checkForUpdate();
-      
+
       if (versionInfo != null && mounted) {
         final shouldShow = await VersionService.shouldShowUpdatePrompt(
           versionInfo.latestVersion,
         );
-        
+
         if (shouldShow && mounted) {
           UpdateDialog.show(context, versionInfo);
         }
@@ -75,8 +68,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   void dispose() {
-    _searchController.dispose();
-    _searchFocusNode.dispose();
     super.dispose();
   }
 
@@ -84,7 +75,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _refreshCacheOnHomeEnter() async {
     try {
       final cacheService = PageCacheService();
-      
+
       // 异步刷新播放记录缓存
       cacheService.refreshPlayRecords(context).then((_) {
         // 刷新成功后通知继续观看组件和播放历史组件更新UI
@@ -95,7 +86,7 @@ class _HomeScreenState extends State<HomeScreen> {
       }).catchError((e) {
         // 静默处理错误
       });
-      
+
       // 异步刷新收藏夹缓存
       cacheService.refreshFavorites(context).then((_) {
         // 刷新成功后通知收藏夹组件更新UI
@@ -122,25 +113,25 @@ class _HomeScreenState extends State<HomeScreen> {
       if (mounted) {
         // 刷新继续观看组件
         await ContinueWatchingSection.refreshPlayRecords();
-        
+
         // 刷新播放历史组件
         await HistoryGrid.refreshHistory();
-        
+
         // 刷新收藏夹组件
         await FavoritesGrid.refreshFavorites();
-        
+
         // 刷新热门电影组件
         await HotMoviesSection.refreshHotMovies();
-        
+
         // 刷新热门剧集组件
         await HotTvSection.refreshHotTvShows();
-        
+
         // 刷新新番放送组件
         await BangumiSection.refreshBangumiCalendar();
-        
+
         // 刷新热门综艺组件
         await HotShowSection.refreshHotShows();
-        
+
         // 强制重建页面
         setState(() {});
       }
@@ -292,7 +283,8 @@ class _HomeScreenState extends State<HomeScreen> {
                           const SizedBox(height: 4),
                           FavoritesGrid(
                             onVideoTap: _onVideoTap,
-                            onGlobalMenuAction: (VideoInfo videoInfo, VideoMenuAction action) {
+                            onGlobalMenuAction:
+                                (VideoInfo videoInfo, VideoMenuAction action) {
                               // 将VideoInfo转换为PlayRecord用于统一处理
                               final playRecord = PlayRecord(
                                 id: videoInfo.id,
@@ -322,36 +314,13 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return MainLayout(
-      content: _isSearchMode
-          ? _buildSearchContent()
-          : _buildCurrentPage(),
+      content: _buildCurrentPage(),
       currentBottomNavIndex: _currentBottomNavIndex,
       onBottomNavChanged: _onBottomNavChanged,
       selectedTopTab: _selectedTopTab,
       onTopTabChanged: _onTopTabChanged,
-      isSearchMode: _isSearchMode,
-      onSearchModeChanged: _onSearchModeChanged,
       onHomeTap: _onHomeTap,
-      searchController: _searchController,
-      searchFocusNode: _searchFocusNode,
-      searchQuery: _searchQuery,
-      onSearchQueryChanged: (value) {
-        setState(() {
-          _searchQuery = value;
-        });
-      },
-      onSearchSubmitted: (value) {
-        // 调用 SearchScreen 的搜索方法
-        _performSearchCallback?.call(value);
-      },
-      onClearSearch: () {
-        setState(() {
-          _searchQuery = '';
-          _searchController.clear();
-        });
-        // 触发 SearchScreen 的清空逻辑
-        // 通过设置空字符串来触发
-      },
+      onSearchTap: _onSearchTap,
     );
   }
 
@@ -376,15 +345,11 @@ class _HomeScreenState extends State<HomeScreen> {
   /// 处理底部导航栏切换
   void _onBottomNavChanged(int index) {
     // 防止重复点击同一个标签
-    if (_currentBottomNavIndex == index && !_isSearchMode) {
+    if (_currentBottomNavIndex == index) {
       return;
     }
-    
+
     setState(() {
-      // 如果在搜索模式下，先退出搜索模式
-      if (_isSearchMode) {
-        _isSearchMode = false;
-      }
       _currentBottomNavIndex = index;
     });
   }
@@ -395,45 +360,37 @@ class _HomeScreenState extends State<HomeScreen> {
     if (_selectedTopTab == tab) {
       return;
     }
-    
+
     setState(() {
       _selectedTopTab = tab;
     });
   }
 
-  /// 处理搜索模式切换
-  void _onSearchModeChanged(bool isSearchMode) {
-    setState(() {
-      _isSearchMode = isSearchMode;
-      if (isSearchMode) {
-        // 进入搜索模式时，聚焦搜索框
-        Future.delayed(const Duration(milliseconds: 100), () {
-          if (mounted) {
-            _searchFocusNode.requestFocus();
-          }
-        });
-      } else {
-        // 退出搜索模式时，清空搜索内容
-        _searchQuery = '';
-        _searchController.clear();
-      }
+  /// 处理点击搜索按钮
+  void _onSearchTap() {
+    Navigator.push(
+      context,
+      PageRouteBuilder(
+        pageBuilder: (context, animation, secondaryAnimation) =>
+            const SearchScreen(),
+        transitionDuration: Duration.zero, // 无打开动画
+        reverseTransitionDuration: Duration.zero, // 无关闭动画
+      ),
+    ).then((_) {
+      // 从搜索页面返回时刷新数据
+      _refreshOnResume();
     });
   }
 
   /// 处理点击 Selene 标题跳转到首页
   void _onHomeTap() {
     setState(() {
-      // 如果在搜索模式下，先退出搜索模式
-      if (_isSearchMode) {
-        _isSearchMode = false;
-      }
       // 切换到首页
       _currentBottomNavIndex = 0;
       // 切换到首页标签
       _selectedTopTab = '首页';
     });
   }
-
 
   /// 处理视频卡片点击
   void _onVideoTap(PlayRecord playRecord) {
@@ -448,7 +405,8 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   /// 处理来自VideoInfo的全局菜单操作
-  void _onGlobalMenuActionFromVideoInfo(VideoInfo videoInfo, VideoMenuAction action) {
+  void _onGlobalMenuActionFromVideoInfo(
+      VideoInfo videoInfo, VideoMenuAction action) {
     // 将VideoInfo转换为PlayRecord用于统一处理
     final playRecord = PlayRecord(
       id: videoInfo.id,
@@ -529,53 +487,12 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  /// 处理搜索结果视频卡片点击
-  void _onSearchVideoTap(VideoInfo videoInfo) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          '点击了搜索结果: ${videoInfo.title}',
-          style: FontUtils.poppins(color: Colors.white),
-        ),
-        backgroundColor: const Color(0xFF27ae60),
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8),
-        ),
-        margin: const EdgeInsets.all(16),
-      ),
-    );
-  }
-
-  /// 构建搜索内容
-  Widget _buildSearchContent() {
-    return SearchScreen(
-      onVideoTap: _onSearchVideoTap,
-      searchController: _searchController,
-      searchFocusNode: _searchFocusNode,
-      onSearchQueryChanged: (value) {
-        setState(() {
-          _searchQuery = value;
-        });
-      },
-      onPerformSearch: (callback) {
-        // 保存 SearchScreen 的搜索回调
-        _performSearchCallback = callback;
-      },
-    );
-  }
-
   /// 从继续观看UI中移除播放记录
   void _removePlayRecordFromUI(PlayRecord playRecord) {
     // 调用继续观看组件和播放历史组件的静态移除方法
     ContinueWatchingSection.removePlayRecordFromUI(
-      playRecord.source, 
-      playRecord.id
-    );
-    HistoryGrid.removeHistoryFromUI(
-      playRecord.source, 
-      playRecord.id
-    );
+        playRecord.source, playRecord.id);
+    HistoryGrid.removeHistoryFromUI(playRecord.source, playRecord.id);
   }
 
   /// 删除播放记录
@@ -583,7 +500,7 @@ class _HomeScreenState extends State<HomeScreen> {
     try {
       // 先从UI中移除记录
       _removePlayRecordFromUI(playRecord);
-      
+
       // 使用统一的删除方法（包含缓存操作和API调用）
       final cacheService = PageCacheService();
       final result = await cacheService.deletePlayRecord(
@@ -591,7 +508,7 @@ class _HomeScreenState extends State<HomeScreen> {
         playRecord.id,
         context,
       );
-      
+
       if (!result.success) {
         throw Exception(result.errorMessage ?? '删除失败');
       }
@@ -637,7 +554,7 @@ class _HomeScreenState extends State<HomeScreen> {
       context,
       MaterialPageRoute(builder: (context) => playerScreen),
     );
-    
+
     _refreshOnResume();
   }
 
@@ -670,7 +587,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
       // 使用统一的收藏方法（包含缓存操作和API调用）
       final cacheService = PageCacheService();
-      final result = await cacheService.addFavorite(playRecord.source, playRecord.id, favoriteData, context);
+      final result = await cacheService.addFavorite(
+          playRecord.source, playRecord.id, favoriteData, context);
 
       if (result.success) {
         // 通知UI刷新收藏状态
@@ -724,15 +642,16 @@ class _HomeScreenState extends State<HomeScreen> {
     try {
       // 先立即从UI中移除该项目
       FavoritesGrid.removeFavoriteFromUI(playRecord.source, playRecord.id);
-      
+
       // 通知继续观看组件刷新收藏状态
       if (mounted) {
         setState(() {});
       }
-      
+
       // 使用统一的取消收藏方法（包含缓存操作和API调用）
       final cacheService = PageCacheService();
-      final result = await cacheService.removeFavorite(playRecord.source, playRecord.id, context);
+      final result = await cacheService.removeFavorite(
+          playRecord.source, playRecord.id, context);
 
       if (!result.success) {
         // 显示错误提示
@@ -783,12 +702,11 @@ class _HomeScreenState extends State<HomeScreen> {
     try {
       // 刷新收藏夹缓存数据
       await PageCacheService().refreshFavorites(context);
-      
+
       // 通知收藏夹组件刷新UI
       FavoritesGrid.refreshFavorites();
     } catch (e) {
       // 错误处理，静默处理
     }
   }
-
 }

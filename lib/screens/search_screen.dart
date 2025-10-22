@@ -14,6 +14,7 @@ import '../widgets/search_result_agg_grid.dart';
 import '../widgets/search_results_grid.dart';
 import '../widgets/filter_options_selector.dart';
 import '../widgets/filter_pill_hover.dart';
+import '../widgets/main_layout.dart';
 import '../utils/font_utils.dart';
 import '../utils/device_utils.dart';
 import 'player_screen.dart';
@@ -21,21 +22,8 @@ import 'player_screen.dart';
 enum SortOrder { none, asc, desc }
 
 class SearchScreen extends StatefulWidget {
-  final Function(VideoInfo)? onVideoTap;
-  final TextEditingController? searchController;
-  final FocusNode? searchFocusNode;
-  final Function(String)? onSearchQueryChanged;
-  final VoidCallback? onClearSearch;
-  final Function(Function(String))? onPerformSearch;
-
   const SearchScreen({
     super.key,
-    this.onVideoTap,
-    this.searchController,
-    this.searchFocusNode,
-    this.onSearchQueryChanged,
-    this.onClearSearch,
-    this.onPerformSearch,
   });
 
   @override
@@ -44,8 +32,8 @@ class SearchScreen extends StatefulWidget {
 
 class _SearchScreenState extends State<SearchScreen>
     with TickerProviderStateMixin {
-  late final TextEditingController _searchController;
-  late final FocusNode _searchFocusNode;
+  final TextEditingController _searchController = TextEditingController();
+  final FocusNode _searchFocusNode = FocusNode();
   final ScrollController _scrollController = ScrollController();
   String _searchQuery = '';
   List<String> _searchHistory = [];
@@ -133,16 +121,6 @@ class _SearchScreenState extends State<SearchScreen>
   void initState() {
     super.initState();
 
-    // 使用外部传入的 controller 和 focusNode，如果没有则创建新的
-    _searchController = widget.searchController ?? TextEditingController();
-    _searchFocusNode = widget.searchFocusNode ?? FocusNode();
-
-    // 监听 controller 的变化，当文本被清空时重置搜索状态
-    _searchController.addListener(_onControllerChanged);
-
-    // 注册搜索回调，让外部可以触发搜索
-    widget.onPerformSearch?.call(_performSearch);
-
     _searchService = SSESearchService();
     _setupSearchListeners();
     _loadSearchHistory();
@@ -159,34 +137,19 @@ class _SearchScreenState extends State<SearchScreen>
       parent: _deleteAnimationController!,
       curve: Curves.easeInOut,
     ));
-  }
 
-  void _onControllerChanged() {
-    // 当文本被外部清空时（例如点击 X 按钮），重置搜索状态
-    if (_searchController.text.isEmpty && _hasSearched) {
+    // 进入搜索页面时自动聚焦搜索框
+    Future.delayed(const Duration(milliseconds: 100), () {
       if (mounted) {
-        setState(() {
-          _searchQuery = '';
-          _hasSearched = false;
-          _hasReceivedStart = false;
-          _searchResults.clear();
-          _searchError = null;
-          _searchProgress = null;
-          _searchService.stopSearch();
-        });
+        _searchFocusNode.requestFocus();
       }
-    }
+    });
   }
 
   @override
   void dispose() {
-    // 只有在没有外部传入时才 dispose
-    if (widget.searchController == null) {
-      _searchController.dispose();
-    }
-    if (widget.searchFocusNode == null) {
-      _searchFocusNode.dispose();
-    }
+    _searchController.dispose();
+    _searchFocusNode.dispose();
     _scrollController.dispose();
     _incrementalResultsSubscription?.cancel();
     _progressSubscription?.cancel();
@@ -567,35 +530,72 @@ class _SearchScreenState extends State<SearchScreen>
   Widget build(BuildContext context) {
     return Consumer<ThemeService>(
       builder: (context, themeService, child) {
-        return Container(
-          color: themeService.isDarkMode
-              ? const Color(0xFF121212)
-              : const Color(0xFFf5f5f5),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (!_hasSearched) ...[
-                // 搜索错误提示
-                if (_searchError != null)
-                  Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: _buildSearchError(themeService),
+        return MainLayout(
+          content: Container(
+            color: themeService.isDarkMode
+                ? const Color(0xFF121212)
+                : const Color(0xFFf5f5f5),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (!_hasSearched) ...[
+                  // 搜索错误提示
+                  if (_searchError != null)
+                    Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: _buildSearchError(themeService),
+                    ),
+                  // 搜索历史（只有在从未搜索过时显示）
+                  Expanded(
+                    child: SingleChildScrollView(
+                      child: _buildSearchHistory(themeService),
+                    ),
                   ),
-                // 搜索历史（只有在从未搜索过时显示）
-                Expanded(
-                  child: SingleChildScrollView(
-                    child: _buildSearchHistory(themeService),
+                ],
+                if (_hasSearched) ...[
+                  // 搜索结果区域，不添加额外padding
+                  Expanded(
+                    child: _buildSearchResults(themeService),
                   ),
-                ),
+                ],
               ],
-              if (_hasSearched) ...[
-                // 搜索结果区域，不添加额外padding
-                Expanded(
-                  child: _buildSearchResults(themeService),
-                ),
-              ],
-            ],
+            ),
           ),
+          currentBottomNavIndex: -1, // 不选中任何底部导航项
+          onBottomNavChanged: (index) {
+            // 点击底部导航时关闭搜索页面
+            Navigator.pop(context);
+          },
+          selectedTopTab: '',
+          onTopTabChanged: (tab) {},
+          showBottomNav: false, // 不显示底部导航栏
+          isSearchMode: true,
+          searchController: _searchController,
+          searchFocusNode: _searchFocusNode,
+          searchQuery: _searchQuery,
+          onSearchQueryChanged: (value) {
+            setState(() {
+              _searchQuery = value;
+            });
+          },
+          onSearchSubmitted: (value) {
+            _performSearch(value);
+          },
+          onClearSearch: () {
+            setState(() {
+              _searchQuery = '';
+              _searchController.clear();
+              _hasSearched = false;
+              _hasReceivedStart = false;
+              _searchResults.clear();
+              _searchError = null;
+              _searchProgress = null;
+              _searchService.stopSearch();
+            });
+          },
+          onHomeTap: () {
+            Navigator.pop(context);
+          },
         );
       },
     );
@@ -746,8 +746,6 @@ class _SearchScreenState extends State<SearchScreen>
                       setState(() {
                         _searchQuery = history;
                       });
-                      // 通知外部状态变化
-                      widget.onSearchQueryChanged?.call(history);
                       _performSearch(history);
                     }
                   },
