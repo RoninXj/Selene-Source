@@ -51,6 +51,9 @@ abstract class PlayRecordOperationInterface {
   /// 根据 source+id 删除播放记录
   Future<DataOperationResult<void>> deletePlayRecord(String source, String id, BuildContext context);
 
+  /// 清空播放记录
+  Future<DataOperationResult<void>> clearPlayRecord(BuildContext context);
+
   /// 刷新播放记录（强制从API获取最新数据）
   Future<void> refreshPlayRecords(BuildContext context);
 }

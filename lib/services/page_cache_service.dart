@@ -191,6 +191,29 @@ class PageCacheService
     }
   }
 
+  @override
+  Future<DataOperationResult<void>> clearPlayRecord(BuildContext context) async {
+    final isLocalMode = await UserDataService.getIsLocalMode();
+    if (isLocalMode) {
+      await LocalModeStorageService.clearPlayRecords();
+      return DataOperationResult.success(null);
+    }
+
+    // 优先操作缓存
+    clearCache('play_records');
+
+    try {
+      final response = await ApiService.clearPlayRecord(context);
+      if (response.success) {
+        return DataOperationResult.success(null);
+      } else {
+        return DataOperationResult.error(response.message ?? '清空播放记录失败');
+      }
+    } catch (e) {
+      return DataOperationResult.error('清空播放记录异常: ${e.toString()}');
+    }
+  }
+
   void _addPlayRecordToCache(PlayRecord playRecord) {
     const cacheKey = 'play_records';
     final cachedData = getCache<List<PlayRecord>>(cacheKey);

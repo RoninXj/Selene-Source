@@ -481,6 +481,20 @@ class ApiService {
     }
   }
 
+  /// 清空播放记录
+  static Future<ApiResponse<void>> clearPlayRecord(BuildContext context) async {
+    try {
+      final response = await delete<void>(
+        '/api/playrecords',
+        context: context,
+      );
+
+      return response;
+    } catch (e) {
+      return ApiResponse.error('清空播放记录异常: ${e.toString()}');
+    }
+  }
+
   /// 添加收藏
   static Future<ApiResponse<void>> favorite(String source, String id,
       Map<String, dynamic> favoriteData, BuildContext context) async {

@@ -16,14 +16,12 @@ import 'shimmer_effect.dart';
 /// 继续观看组件
 class ContinueWatchingSection extends StatefulWidget {
   final Function(PlayRecord)? onVideoTap;
-  final VoidCallback? onClear;
   final Function(PlayRecord, VideoMenuAction)? onGlobalMenuAction;
   final VoidCallback? onViewAll;
 
   const ContinueWatchingSection({
     super.key,
     this.onVideoTap,
-    this.onClear,
     this.onGlobalMenuAction,
     this.onViewAll,
   });
@@ -344,10 +342,7 @@ class _ContinueWatchingSectionState extends State<ContinueWatchingSection>
   /// 清空播放记录
   Future<void> _clearPlayRecords() async {
     try {
-      final response = await ApiService.delete(
-        '/api/playrecords',
-        context: context,
-      );
+      final response = await PageCacheService().clearPlayRecord(context);
 
       if (response.success) {
         setState(() {
@@ -376,7 +371,7 @@ class _ContinueWatchingSectionState extends State<ContinueWatchingSection>
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(
-                response.message ?? '清空失败',
+                '清空失败',
                 style: FontUtils.poppins(color: Colors.white),
               ),
               backgroundColor: const Color(0xFFe74c3c),
