@@ -1,0 +1,431 @@
+import 'dart:async';
+import 'package:flutter/material.dart';
+import 'package:media_kit/media_kit.dart';
+import 'package:media_kit_video/media_kit_video.dart';
+import 'custom_better_player_controls.dart';
+import 'custom_media_kit_controls.dart';
+import 'video_player_surface.dart';
+
+class FFmpegVideoPlayerWidget extends StatefulWidget {
+  final VideoPlayerSurface surface;
+  final String? url;
+  final Map<String, String>? headers;
+  final VoidCallback? onBackPressed;
+  final Function(FFmpegVideoPlayerWidgetController)? onControllerCreated;
+  final VoidCallback? onReady;
+  final VoidCallback? onNextEpisode;
+  final VoidCallback? onVideoCompleted;
+  final VoidCallback? onPause;
+  final bool isLastEpisode;
+  final Function(dynamic)? onCastStarted;
+  final String? videoTitle;
+  final int? currentEpisodeIndex;
+  final int? totalEpisodes;
+  final String? sourceName;
+  final Function(bool isWebFullscreen)? onWebFullscreenChanged;
+  final bool live;
+
+  const FFmpegVideoPlayerWidget({
+    super.key,
+    this.surface = VideoPlayerSurface.mobile,
+    this.url,
+    this.headers,
+    this.onBackPressed,
+    this.onControllerCreated,
+    this.onReady,
+    this.onNextEpisode,
+    this.onVideoCompleted,
+    this.onPause,
+    this.isLastEpisode = false,
+    this.onCastStarted,
+    this.videoTitle,
+    this.currentEpisodeIndex,
+    this.totalEpisodes,
+    this.sourceName,
+    this.onWebFullscreenChanged,
+    this.live = false,
+  });
+
+  @override
+  State<FFmpegVideoPlayerWidget> createState() => _FFmpegVideoPlayerWidgetState();
+}
+
+class FFmpegVideoPlayerWidgetController {
+  FFmpegVideoPlayerWidgetController._(this._state);
+  final _FFmpegVideoPlayerWidgetState _state;
+
+  Future<void> updateDataSource(
+    String url, {
+    Duration? startAt,
+    Map<String, String>? headers,
+  }) async {
+    await _state._updateDataSource(
+      url,
+      startAt: startAt,
+      headers: headers,
+    );
+  }
+
+  Future<void> seekTo(Duration position) async {
+    await _state._player?.seek(position);
+  }
+
+  Duration? get currentPosition => _state._player?.state.position;
+
+  Duration? get duration => _state._player?.state.duration;
+
+  bool get isPlaying => _state._player?.state.playing ?? false;
+
+  Future<void> pause() async {
+    await _state._player?.pause();
+  }
+
+  Future<void> play() async {
+    await _state._player?.play();
+  }
+
+  void addProgressListener(VoidCallback listener) {
+    _state._addProgressListener(listener);
+  }
+
+  void removeProgressListener(VoidCallback listener) {
+    _state._removeProgressListener(listener);
+  }
+
+  Future<void> setSpeed(double speed) async {
+    await _state._setPlaybackSpeed(speed);
+  }
+
+  double get playbackSpeed => _state._playbackSpeed.value;
+
+  Future<void> setVolume(double volume) async {
+    await _state._player?.setVolume(volume);
+  }
+
+  double? get volume => _state._player?.state.volume;
+
+  void exitWebFullscreen() {
+    _state._exitWebFullscreen();
+  }
+
+  Future<void> dispose() async {
+    await _state._externalDispose();
+  }
+}
+
+class _FFmpegVideoPlayerWidgetState extends State<FFmpegVideoPlayerWidget>
+    with WidgetsBindingObserver {
+  Player? _player;
+  VideoController? _videoController;
+  bool _isInitialized = false;
+  bool _hasCompleted = false;
+  bool _isLoadingVideo = false;
+  String? _currentUrl;
+  Map<String, String>? _currentHeaders;
+  final List<VoidCallback> _progressListeners = [];
+  StreamSubscription<Duration>? _positionSubscription;
+  StreamSubscription<bool>? _playingSubscription;
+  StreamSubscription<bool>? _completedSubscription;
+  StreamSubscription<Duration>? _durationSubscription;
+  final ValueNotifier<double> _playbackSpeed = ValueNotifier<double>(1.0);
+  bool _playerDisposed = false;
+  VoidCallback? _exitWebFullscreenCallback;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _currentUrl = widget.url;
+    _currentHeaders = widget.headers;
+    _initializePlayer();
+    widget.onControllerCreated?.call(FFmpegVideoPlayerWidgetController._(this));
+  }
+
+  @override
+  void didUpdateWidget(covariant FFmpegVideoPlayerWidget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.headers != oldWidget.headers && widget.headers != null) {
+      _currentHeaders = widget.headers;
+    }
+    if (widget.url != oldWidget.url && widget.url != null) {
+      unawaited(_updateDataSource(widget.url!));
+    }
+  }
+
+  Future<void> _initializePlayer() async {
+    if (_playerDisposed) {
+      return;
+    }
+    _player = Player();
+    _videoController = VideoController(_player!);
+    _setupPlayerListeners();
+    setState(() {
+      _isInitialized = true;
+    });
+    if (_currentUrl != null) {
+      await _openCurrentMedia();
+    }
+  }
+
+  Future<void> _openCurrentMedia({Duration? startAt}) async {
+    if (_playerDisposed || _player == null || _currentUrl == null) {
+      return;
+    }
+    setState(() {
+      _isLoadingVideo = true;
+    });
+    try {
+      await _player!.open(
+        Media(
+          _currentUrl!,
+          start: startAt,
+          httpHeaders: _currentHeaders ?? const <String, String>{},
+        ),
+        play: true,
+      );
+      await _player!.setRate(_playbackSpeed.value);
+      setState(() {
+        _hasCompleted = false;
+        _isLoadingVideo = false;
+      });
+      widget.onReady?.call();
+    } catch (error) {
+      debugPrint('FFmpegVideoPlayerWidget: failed to open media $error');
+      if (mounted) {
+        setState(() {
+          _isLoadingVideo = false;
+        });
+      }
+    }
+  }
+
+  void _setupPlayerListeners() {
+    if (_player == null) {
+      return;
+    }
+    _positionSubscription?.cancel();
+    _playingSubscription?.cancel();
+    _completedSubscription?.cancel();
+    _durationSubscription?.cancel();
+
+    _positionSubscription = _player!.stream.position.listen((_) {
+      for (final listener in List<VoidCallback>.from(_progressListeners)) {
+        try {
+          listener();
+        } catch (error) {
+          debugPrint('FFmpegVideoPlayerWidget: progress listener error $error');
+        }
+      }
+    });
+
+    _playingSubscription = _player!.stream.playing.listen((playing) {
+      if (!mounted) return;
+      if (!playing) {
+        setState(() {
+          _hasCompleted = false;
+        });
+      }
+    });
+
+    if (!widget.live) {
+      _completedSubscription = _player!.stream.completed.listen((completed) {
+        if (!mounted) return;
+        if (completed && !_hasCompleted) {
+          _hasCompleted = true;
+          widget.onVideoCompleted?.call();
+        }
+      });
+    }
+
+    _durationSubscription = _player!.stream.duration.listen((duration) {
+      if (!mounted) return;
+      if (duration != Duration.zero || widget.live) {
+        if (_isLoadingVideo) {
+          setState(() {
+            _isLoadingVideo = false;
+          });
+        }
+        widget.onReady?.call();
+      }
+    });
+  }
+
+  Future<void> _updateDataSource(
+    String url, {
+    Duration? startAt,
+    Map<String, String>? headers,
+  }) async {
+    if (_playerDisposed) {
+      return;
+    }
+    _currentUrl = url;
+    if (headers != null) {
+      _currentHeaders = headers;
+    }
+
+    if (_player == null) {
+      await _initializePlayer();
+      return;
+    }
+
+    setState(() {
+      _isLoadingVideo = true;
+    });
+
+    try {
+      final currentSpeed = _player!.state.rate;
+      await _player!.open(
+        Media(
+          url,
+          start: startAt,
+          httpHeaders: _currentHeaders ?? const <String, String>{},
+        ),
+        play: true,
+      );
+      _playbackSpeed.value = currentSpeed;
+      await _player!.setRate(currentSpeed);
+      if (mounted) {
+        setState(() {
+          _hasCompleted = false;
+          _isLoadingVideo = false;
+        });
+      }
+      widget.onReady?.call();
+    } catch (error) {
+      debugPrint('FFmpegVideoPlayerWidget: error while changing source $error');
+      if (mounted) {
+        setState(() {
+          _isLoadingVideo = false;
+        });
+      }
+    }
+  }
+
+  void _addProgressListener(VoidCallback listener) {
+    if (!_progressListeners.contains(listener)) {
+      _progressListeners.add(listener);
+    }
+  }
+
+  void _removeProgressListener(VoidCallback listener) {
+    _progressListeners.remove(listener);
+  }
+
+  Future<void> _setPlaybackSpeed(double speed) async {
+    _playbackSpeed.value = speed;
+    await _player?.setRate(speed);
+  }
+
+  void _exitWebFullscreen() {
+    _exitWebFullscreenCallback?.call();
+  }
+
+  Future<void> _externalDispose() async {
+    if (!mounted || _playerDisposed) {
+      return;
+    }
+    await _disposePlayer();
+  }
+
+  Future<void> _disposePlayer() async {
+    if (_playerDisposed) {
+      return;
+    }
+    _playerDisposed = true;
+    _positionSubscription?.cancel();
+    _playingSubscription?.cancel();
+    _completedSubscription?.cancel();
+    _durationSubscription?.cancel();
+    _progressListeners.clear();
+    await _player?.dispose();
+    _player = null;
+    _videoController = null;
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    if (_player == null) {
+      return;
+    }
+    switch (state) {
+      case AppLifecycleState.paused:
+      case AppLifecycleState.inactive:
+      case AppLifecycleState.hidden:
+        break;
+      case AppLifecycleState.resumed:
+        break;
+      case AppLifecycleState.detached:
+        break;
+    }
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _disposePlayer();
+    _playbackSpeed.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: Colors.black,
+      child: _isInitialized && _videoController != null
+          ? Video(
+              controller: _videoController!,
+              controls: (state) {
+                return widget.surface == VideoPlayerSurface.desktop
+                    ? CustomMediaKitControls(
+                        state: state,
+                        player: _player!,
+                        onBackPressed: widget.onBackPressed,
+                        onNextEpisode: widget.onNextEpisode,
+                        onPause: widget.onPause,
+                        videoUrl: _currentUrl ?? '',
+                        isLastEpisode: widget.isLastEpisode,
+                        isLoadingVideo: _isLoadingVideo,
+                        onCastStarted: widget.onCastStarted,
+                        videoTitle: widget.videoTitle,
+                        currentEpisodeIndex: widget.currentEpisodeIndex,
+                        totalEpisodes: widget.totalEpisodes,
+                        sourceName: widget.sourceName,
+                        onWebFullscreenChanged: widget.onWebFullscreenChanged,
+                        onExitWebFullscreenCallbackReady: (callback) {
+                          _exitWebFullscreenCallback = callback;
+                        },
+                        live: widget.live,
+                        playbackSpeedListenable: _playbackSpeed,
+                        onSetSpeed: _setPlaybackSpeed,
+                      )
+                    : CustomBetterPlayerControls(
+                        player: _player!,
+                        state: state,
+                        onControlsVisibilityChanged: (_) {},
+                        onBackPressed: widget.onBackPressed,
+                        onFullscreenChange: (_) {},
+                        onNextEpisode: widget.onNextEpisode,
+                        onPause: widget.onPause,
+                        videoUrl: _currentUrl ?? '',
+                        isLastEpisode: widget.isLastEpisode,
+                        isLoadingVideo: _isLoadingVideo,
+                        onCastStarted: widget.onCastStarted,
+                        videoTitle: widget.videoTitle,
+                        currentEpisodeIndex: widget.currentEpisodeIndex,
+                        totalEpisodes: widget.totalEpisodes,
+                        sourceName: widget.sourceName,
+                        live: widget.live,
+                        playbackSpeedListenable: _playbackSpeed,
+                        onSetSpeed: _setPlaybackSpeed,
+                      );
+              },
+            )
+          : const Center(
+              child: CircularProgressIndicator(
+                color: Colors.white,
+              ),
+            ),
+    );
+  }
+}

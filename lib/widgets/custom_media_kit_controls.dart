@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
-import 'pc_video_player_widget.dart';
 import 'dlna_device_dialog.dart';
 
 // 带 hover 效果的按钮组件
@@ -56,7 +55,6 @@ class CustomMediaKitControls extends StatefulWidget {
   final VoidCallback? onBackPressed;
   final VoidCallback? onNextEpisode;
   final VoidCallback? onPause;
-  final PcVideoPlayerWidgetController? playerController;
   final String videoUrl;
   final bool isLastEpisode;
   final bool isLoadingVideo;
@@ -69,6 +67,8 @@ class CustomMediaKitControls extends StatefulWidget {
   final Function(bool isWebFullscreen)? onWebFullscreenChanged;
   final Function(VoidCallback)? onExitWebFullscreenCallbackReady;
   final bool live;
+  final ValueNotifier<double> playbackSpeedListenable;
+  final Future<void> Function(double speed) onSetSpeed;
 
   const CustomMediaKitControls({
     super.key,
@@ -77,7 +77,6 @@ class CustomMediaKitControls extends StatefulWidget {
     this.onBackPressed,
     this.onNextEpisode,
     this.onPause,
-    this.playerController,
     required this.videoUrl,
     this.isLastEpisode = false,
     this.isLoadingVideo = false,
@@ -90,6 +89,8 @@ class CustomMediaKitControls extends StatefulWidget {
     this.onWebFullscreenChanged,
     this.onExitWebFullscreenCallbackReady,
     this.live = false,
+    required this.playbackSpeedListenable,
+    required this.onSetSpeed,
   });
 
   @override
@@ -1041,7 +1042,7 @@ class _CustomMediaKitControlsState extends State<CustomMediaKitControls> {
                     isSelected: isSelected,
                     isFullscreen: effectiveFullscreen,
                     onTap: () {
-                      widget.player.setRate(speed);
+                      widget.onSetSpeed(speed);
                       setState(() {
                         _showSpeedMenu = false;
                         _isHoveringSpeedMenu = false;

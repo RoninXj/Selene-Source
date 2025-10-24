@@ -195,13 +195,48 @@ class _LivePlayerScreenState extends State<LivePlayerScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_programScrollController.hasClients) return;
       
-      // 计算滚动位置（每个节目项约 100 像素高度）
-      const itemHeight = 100.0;
-      final targetOffset = currentIndex * itemHeight;
+      // 计算节目项的精确高度
+      // padding: 12 (top) + 12 (bottom) = 24
+      // margin: 12 (bottom) = 12
+      // 内容高度估算：
+      // - 时间行: ~20 (包括 badge 或纯文本)
+      // - 间距: 6
+      // - 标题: ~20
+      // - 描述(如果有): ~30
+      // - 进度条(如果是直播): ~16
+      // 基础高度 = 24 + 12 + 20 + 6 + 20 = 82
+      // 有描述时 += 34 (4间距 + 30高度)
+      // 有进度条时 += 12 (8间距 + 4高度)
+      
+      // 使用保守估计，每个项目约 110 像素(包含描述的情况)
+      const double baseItemHeight = 82.0;
+      const double descriptionHeight = 34.0;
+      const double progressHeight = 12.0;
+      
+      // 计算到目标节目的累计高度
+      double totalOffset = 0.0;
+      for (int i = 0; i < currentIndex; i++) {
+        double itemHeight = baseItemHeight;
+        if (_programs![i].description != null && _programs![i].description!.isNotEmpty) {
+          itemHeight += descriptionHeight;
+        }
+        if (_programs![i].isLive) {
+          itemHeight += progressHeight;
+        }
+        totalOffset += itemHeight;
+      }
+      
+      // 获取可视区域高度,将当前节目定位在屏幕中央偏上位置
+      final viewportHeight = _programScrollController.position.viewportDimension;
+      final centerOffset = totalOffset - (viewportHeight * 0.3);
+      
+      // 确保不会滚动到负值或超出最大滚动范围
+      final maxScrollExtent = _programScrollController.position.maxScrollExtent;
+      final clampedOffset = centerOffset.clamp(0.0, maxScrollExtent);
       
       // 滚动到目标位置
       _programScrollController.animateTo(
-        targetOffset,
+        clampedOffset,
         duration: const Duration(milliseconds: 500),
         curve: Curves.easeInOut,
       );
@@ -221,7 +256,8 @@ class _LivePlayerScreenState extends State<LivePlayerScreen> {
           context,
           duration: const Duration(milliseconds: 500),
           curve: Curves.easeInOut,
-          alignment: 0.3, // 将当前频道显示在屏幕上方 30% 的位置
+          alignment: 0.25, // 将当前频道显示在屏幕上方 25% 的位置，留出更多空间显示下方频道
+          alignmentPolicy: ScrollPositionAlignmentPolicy.explicit,
         );
       }
     });

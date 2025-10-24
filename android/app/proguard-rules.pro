@@ -45,10 +45,6 @@
 -keep class com.alexmercerind.**.MediaKitPlugin { *; }
 -dontwarn com.alexmercerind.**
 
-# FVP - 只保留插件类
--keep class com.befovy.fijkplayer.FijkPlugin { *; }
--dontwarn com.befovy.fijkplayer.**
-
 # =========================
 # Network (最小化)
 # =========================

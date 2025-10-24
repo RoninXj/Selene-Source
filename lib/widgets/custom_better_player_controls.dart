@@ -1,25 +1,22 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:awesome_video_player/awesome_video_player.dart';
-import 'package:volume_controller/volume_controller.dart';
+import 'package:media_kit/media_kit.dart';
+import 'package:media_kit_video/media_kit_video.dart';
 import 'package:screen_brightness/screen_brightness.dart';
-import 'mobile_video_player_widget.dart';
+import 'package:volume_controller/volume_controller.dart';
 import 'dlna_device_dialog.dart';
 
-// LoadingVideoNotifier 已在 video_player_widget.dart 中定义，通过 import 引入
-
 class CustomBetterPlayerControls extends StatefulWidget {
-  final BetterPlayerController controller;
+  final Player player;
+  final VideoState state;
   final Function(bool) onControlsVisibilityChanged;
   final VoidCallback? onBackPressed;
   final Function(bool) onFullscreenChange;
   final VoidCallback? onNextEpisode;
   final VoidCallback? onPause;
-  final MobileVideoPlayerWidgetController? playerController;
   final String videoUrl;
   final bool isLastEpisode;
-  final GlobalKey? betterPlayerKey;
   final bool isLoadingVideo;
   final Function(dynamic)? onCastStarted;
   final String? videoTitle;
@@ -27,19 +24,20 @@ class CustomBetterPlayerControls extends StatefulWidget {
   final int? totalEpisodes;
   final String? sourceName;
   final bool live;
+  final ValueNotifier<double> playbackSpeedListenable;
+  final Future<void> Function(double speed) onSetSpeed;
 
   const CustomBetterPlayerControls({
     super.key,
-    required this.controller,
+    required this.player,
+    required this.state,
     required this.onControlsVisibilityChanged,
     this.onBackPressed,
     required this.onFullscreenChange,
     this.onNextEpisode,
     this.onPause,
-    this.playerController,
     required this.videoUrl,
     this.isLastEpisode = false,
-    this.betterPlayerKey,
     this.isLoadingVideo = false,
     this.onCastStarted,
     this.videoTitle,
@@ -47,215 +45,110 @@ class CustomBetterPlayerControls extends StatefulWidget {
     this.totalEpisodes,
     this.sourceName,
     this.live = false,
+    required this.playbackSpeedListenable,
+    required this.onSetSpeed,
   });
 
   @override
-  State<CustomBetterPlayerControls> createState() =>
-      _CustomBetterPlayerControlsState();
+  State<CustomBetterPlayerControls> createState() => _CustomBetterPlayerControlsState();
 }
 
-class _CustomBetterPlayerControlsState
-    extends State<CustomBetterPlayerControls> {
+class _CustomBetterPlayerControlsState extends State<CustomBetterPlayerControls> {
+  final List<StreamSubscription> _subscriptions = [];
   Timer? _hideTimer;
   bool _controlsVisible = true;
-  bool _lastPlayingState = false;
   bool _isLongPressing = false;
   double _originalPlaybackSpeed = 1.0;
   Duration? _dragPosition;
   bool _isSeekingViaSwipe = false;
   double _swipeStartX = 0;
   Duration _swipeStartPosition = Duration.zero;
-  bool _isInPipMode = false;
-  bool _isShowingDLNADialog = false;
+  Size? _screenSize;
   bool _isLocked = false;
-  double _currentVolume = 0.5;
   bool _showVolumeIndicator = false;
-  Timer? _volumeHideTimer;
-  double _currentBrightness = 0.5;
   bool _showBrightnessIndicator = false;
+  double _currentVolume = 0.5;
+  double _currentBrightness = 0.5;
+  Timer? _volumeHideTimer;
   Timer? _brightnessHideTimer;
 
   @override
   void initState() {
     super.initState();
-    widget.controller.addEventsListener(_onVideoStateChanged);
-    widget.controller.videoPlayerController?.addListener(_onVideoPlayerUpdate);
-    _initVolume();
-    _initBrightness();
+    _initSystemControls();
+    _listenPlayerStreams();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        _forceStartHideTimer();
-      }
+      if (!mounted) return;
+      _forceStartHideTimer();
+      widget.onControlsVisibilityChanged(true);
     });
   }
 
-  Future<void> _initVolume() async {
-    try {
-      // 隐藏系统音量UI
-      VolumeController.instance.showSystemUI = false;
-      final volume = await VolumeController.instance.getVolume();
+  void _initSystemControls() {
+    VolumeController.instance.showSystemUI = false;
+    VolumeController.instance.getVolume().then((value) {
       if (mounted) {
-        setState(() {
-          _currentVolume = volume;
-        });
+        setState(() => _currentVolume = value);
       }
-    } catch (e) {
-      // 如果获取音量失败，使用默认值
-      _currentVolume = 0.5;
-    }
+    }).catchError((_) {});
+    ScreenBrightness().current.then((value) {
+      if (mounted) {
+        setState(() => _currentBrightness = value);
+      }
+    }).catchError((_) {});
   }
 
-  Future<void> _initBrightness() async {
-    try {
-      final brightness = await ScreenBrightness().current;
-      if (mounted) {
-        setState(() {
-          _currentBrightness = brightness;
-        });
+  void _listenPlayerStreams() {
+    _subscriptions.add(widget.player.stream.playing.listen((playing) {
+      if (!mounted) return;
+      if (playing && _controlsVisible) {
+        _startHideTimer();
       }
-    } catch (e) {
-      // 如果获取亮度失败，使用默认值
-      _currentBrightness = 0.5;
-    }
-  }
-
-  void _onVideoPlayerUpdate() {
-    if (mounted) {
-      setState(() {});
-    }
-  }
-
-  void _onVideoStateChanged(BetterPlayerEvent event) {
-    if (!mounted) return;
-
-    // 监听全屏状态变化
-    if (event.betterPlayerEventType == BetterPlayerEventType.openFullscreen) {
-      // 进入全屏时通知父组件
-      widget.onFullscreenChange(true);
-      // 触发重建以更新UI
-      if (mounted) {
-        setState(() {});
-      }
-    } else if (event.betterPlayerEventType ==
-        BetterPlayerEventType.hideFullscreen) {
-      // 退出全屏时通知父组件（包括系统返回键触发的退出）
-      widget.onFullscreenChange(false);
-      // 触发重建以更新UI
-      if (mounted) {
-        setState(() {});
-        // 如果是因为要显示 DLNA 对话框而退出全屏，在重建完成后显示对话框
-        if (_isShowingDLNADialog) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted) {
-              _showDLNADialogInternal();
-            }
-          });
-        }
-      }
-    }
-    // 监听 PiP 状态变化
-    else if (event.betterPlayerEventType == BetterPlayerEventType.pipStart) {
-      setState(() {
-        _isInPipMode = true;
-        _controlsVisible = false;
-      });
-      _hideTimer?.cancel();
-      widget.onControlsVisibilityChanged(false);
-      // PiP 开始时立刻播放视频
-      widget.controller.play();
-    } else if (event.betterPlayerEventType == BetterPlayerEventType.pipStop) {
-      // 退出 PiP 模式时立即设置为竖屏
-      SystemChrome.setPreferredOrientations([
-        DeviceOrientation.portraitUp,
-        DeviceOrientation.portraitDown,
-      ]);
-      setState(() {
-        _isInPipMode = false;
-        _controlsVisible = true;
-      });
-      _startHideTimer();
-      widget.onControlsVisibilityChanged(true);
-    }
-
-    final isPlaying = widget.controller.isPlaying() ?? false;
-
-    if (isPlaying != _lastPlayingState) {
-      _lastPlayingState = isPlaying;
-
-      if (_isLongPressing) return;
-
-      if (isPlaying) {
-        if (_controlsVisible) {
-          _startHideTimer();
-        }
-      } else {
+      if (!playing) {
         _hideTimer?.cancel();
         if (!_controlsVisible) {
-          setState(() {
-            _controlsVisible = true;
-          });
+          setState(() => _controlsVisible = true);
+          widget.onControlsVisibilityChanged(true);
         }
       }
-    }
+    }));
 
-    if (isPlaying && _controlsVisible && _hideTimer == null) {
-      _startHideTimer();
-    }
+    _subscriptions.add(widget.player.stream.position.listen((_) {
+      if (!mounted) return;
+      if (_controlsVisible && !_isSeekingViaSwipe) {
+        setState(() {});
+      }
+    }));
 
-    // 确保视频播放器监听器已添加
-    if (event.betterPlayerEventType == BetterPlayerEventType.initialized) {
-      widget.controller.videoPlayerController
-          ?.removeListener(_onVideoPlayerUpdate);
-      widget.controller.videoPlayerController
-          ?.addListener(_onVideoPlayerUpdate);
-    }
-  }
-
-  void _onLongPressStart(LongPressStartDetails details) {
-    if (widget.live || !(widget.controller.isPlaying() ?? false)) {
-      return;
-    }
-
-    setState(() {
-      _isLongPressing = true;
-      _originalPlaybackSpeed =
-          widget.controller.videoPlayerController?.value.speed ?? 1.0;
-      widget.controller.setSpeed(2.0);
-    });
-  }
-
-  void _onLongPressEnd(LongPressEndDetails details) {
-    if (widget.live || !_isLongPressing) {
-      return;
-    }
-
-    setState(() {
-      _isLongPressing = false;
-      widget.controller.setSpeed(_originalPlaybackSpeed);
-    });
+    _subscriptions.add(widget.player.stream.completed.listen((_) {
+      if (!mounted) return;
+      setState(() {});
+    }));
   }
 
   @override
   void dispose() {
+    for (final subscription in _subscriptions) {
+      subscription.cancel();
+    }
     _hideTimer?.cancel();
     _volumeHideTimer?.cancel();
     _brightnessHideTimer?.cancel();
-    // 恢复系统音量UI显示
     VolumeController.instance.showSystemUI = true;
-    widget.controller.videoPlayerController
-        ?.removeListener(_onVideoPlayerUpdate);
-    widget.controller.removeEventsListener(_onVideoStateChanged);
     super.dispose();
   }
 
+  bool get _isFullscreen => widget.state.isFullscreen();
+  bool get _isPlaying => widget.player.state.playing;
+  Duration get _position => widget.player.state.position;
+  Duration get _duration => widget.player.state.duration;
+
   void _startHideTimer() {
     _hideTimer?.cancel();
-    if (widget.controller.isPlaying() ?? false) {
+    if (_isPlaying) {
       _hideTimer = Timer(const Duration(seconds: 3), () {
         if (mounted) {
-          setState(() {
-            _controlsVisible = false;
-          });
+          setState(() => _controlsVisible = false);
           widget.onControlsVisibilityChanged(false);
         }
       });
@@ -266,35 +159,23 @@ class _CustomBetterPlayerControlsState
     _hideTimer?.cancel();
     _hideTimer = Timer(const Duration(seconds: 3), () {
       if (mounted) {
-        setState(() {
-          _controlsVisible = false;
-        });
+        setState(() => _controlsVisible = false);
         widget.onControlsVisibilityChanged(false);
       }
     });
   }
 
   void _onUserInteraction() {
-    setState(() {
-      _controlsVisible = true;
-    });
-    widget.onControlsVisibilityChanged(true);
+    if (!_controlsVisible) {
+      setState(() => _controlsVisible = true);
+      widget.onControlsVisibilityChanged(true);
+    }
     _startHideTimer();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        setState(() {});
-      }
-    });
   }
 
-  void _onBlankAreaTap() {
-    if (!mounted) return;
-
-    // 如果已锁定，只切换锁定按钮的显示/隐藏
+  void _toggleControlsVisibility() {
     if (_isLocked) {
-      setState(() {
-        _controlsVisible = !_controlsVisible;
-      });
+      setState(() => _controlsVisible = !_controlsVisible);
       if (_controlsVisible) {
         _startHideTimer();
       } else {
@@ -302,916 +183,218 @@ class _CustomBetterPlayerControlsState
       }
       return;
     }
-
-    setState(() {
-      _controlsVisible = !_controlsVisible;
-    });
+    setState(() => _controlsVisible = !_controlsVisible);
     widget.onControlsVisibilityChanged(_controlsVisible);
-
     if (_controlsVisible) {
       _startHideTimer();
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
-          setState(() {});
-        }
-      });
     } else {
       _hideTimer?.cancel();
     }
   }
 
-  void _onSeekStart() {
-    if (!mounted) return;
+  void _onLongPressStart(LongPressStartDetails details) {
+    if (widget.live || !_isPlaying) return;
     setState(() {
-      _controlsVisible = true;
-      _dragPosition = null;
+      _isLongPressing = true;
+      _originalPlaybackSpeed = widget.playbackSpeedListenable.value;
     });
-    _hideTimer?.cancel();
-    _startHideTimer();
+    widget.onSetSpeed(2.0);
   }
 
-  void _onSeekEnd() {
-    setState(() {
-      _dragPosition = null;
-    });
-    _startHideTimer();
+  void _onLongPressEnd(LongPressEndDetails details) {
+    if (!_isLongPressing || widget.live) return;
+    widget.onSetSpeed(_originalPlaybackSpeed);
+    setState(() => _isLongPressing = false);
   }
 
   void _onSwipeStart(DragStartDetails details) {
-    if (!mounted || widget.live) return;
-
-    if (widget.controller.videoPlayerController?.value.hasError == true) {
-      return;
-    }
-
+    if (widget.live) return;
+    _screenSize ??= MediaQuery.of(context).size;
     setState(() {
       _isSeekingViaSwipe = true;
       _swipeStartX = details.globalPosition.dx;
-      _swipeStartPosition =
-          widget.controller.videoPlayerController!.value.position;
+      _swipeStartPosition = _position;
+      _dragPosition = null;
       _controlsVisible = true;
     });
-
     _hideTimer?.cancel();
   }
 
   void _onSwipeUpdate(DragUpdateDetails details) {
-    if (!mounted || !_isSeekingViaSwipe || widget.live) return;
-
-    if (widget.controller.videoPlayerController?.value.hasError == true) {
-      return;
-    }
-
-    final screenWidth = MediaQuery.of(context).size.width;
+    if (!_isSeekingViaSwipe || widget.live || _screenSize == null) return;
+    final screenWidth = _screenSize!.width;
     final swipeDistance = details.globalPosition.dx - _swipeStartX;
     final swipeRatio = swipeDistance / (screenWidth * 0.5);
-    final duration = widget.controller.videoPlayerController!.value.duration!;
-
-    final targetPosition = _swipeStartPosition +
-        Duration(
-            milliseconds: (duration.inMilliseconds * swipeRatio * 0.1).round());
-    final clampedPosition = Duration(
-        milliseconds:
-            targetPosition.inMilliseconds.clamp(0, duration.inMilliseconds));
-
-    setState(() {
-      _dragPosition = clampedPosition;
-    });
+    final duration = _duration;
+    if (duration == Duration.zero) return;
+    final targetPosition = _swipeStartPosition + Duration(
+      milliseconds: (duration.inMilliseconds * swipeRatio * 0.1).round(),
+    );
+    final clamped = Duration(
+      milliseconds: targetPosition.inMilliseconds.clamp(0, duration.inMilliseconds),
+    );
+    setState(() => _dragPosition = clamped);
   }
 
   void _onSwipeEnd(DragEndDetails details) {
-    if (!mounted || !_isSeekingViaSwipe || widget.live) return;
-
-    if (widget.controller.videoPlayerController?.value.hasError == true) {
-      setState(() {
-        _isSeekingViaSwipe = false;
-      });
-      return;
-    }
-
+    if (!_isSeekingViaSwipe || widget.live) return;
     if (_dragPosition != null) {
-      widget.controller.seekTo(_dragPosition!);
+      widget.player.seek(_dragPosition!);
     }
-
     setState(() {
       _isSeekingViaSwipe = false;
       _dragPosition = null;
     });
-
     _startHideTimer();
   }
 
   void _onVolumeSwipeStart(DragStartDetails details) {
-    if (!mounted || _isLocked) return;
+    if (!_isFullscreen || _isLocked) return;
     _volumeHideTimer?.cancel();
-    _hideTimer?.cancel(); // 取消 controls 自动隐藏
-    setState(() {
-      _controlsVisible = true; // 确保 controls 显示
-    });
+    _hideTimer?.cancel();
+    setState(() => _controlsVisible = true);
   }
 
   void _onVolumeSwipeUpdate(DragUpdateDetails details) {
-    if (!mounted || _isLocked) return;
-
+    if (!_isFullscreen || _isLocked) return;
     final screenHeight = MediaQuery.of(context).size.height;
-    final deltaY = details.delta.dy;
-    final volumeChange = -(deltaY / screenHeight) * 2; // 负号因为向上滑动是负值
-
+    final volumeChange = -(details.delta.dy / screenHeight) * 2;
     setState(() {
       _currentVolume = (_currentVolume + volumeChange).clamp(0.0, 1.0);
       _showVolumeIndicator = true;
     });
-
     VolumeController.instance.setVolume(_currentVolume);
     _startVolumeHideTimer();
   }
 
   void _onVolumeSwipeEnd(DragEndDetails details) {
-    if (!mounted || _isLocked) return;
+    if (!_isFullscreen || _isLocked) return;
     _startVolumeHideTimer();
-    _startHideTimer(); // 重新启动 controls 自动隐藏计时器
+    _startHideTimer();
   }
 
   void _startVolumeHideTimer() {
     _volumeHideTimer?.cancel();
     _volumeHideTimer = Timer(const Duration(seconds: 2), () {
       if (mounted) {
-        setState(() {
-          _showVolumeIndicator = false;
-        });
+        setState(() => _showVolumeIndicator = false);
       }
     });
   }
 
   void _onBrightnessSwipeStart(DragStartDetails details) {
-    if (!mounted || _isLocked) return;
+    if (!_isFullscreen || _isLocked) return;
     _brightnessHideTimer?.cancel();
-    _hideTimer?.cancel(); // 取消 controls 自动隐藏
-    setState(() {
-      _controlsVisible = true; // 确保 controls 显示
-    });
+    _hideTimer?.cancel();
+    setState(() => _controlsVisible = true);
   }
 
   void _onBrightnessSwipeUpdate(DragUpdateDetails details) {
-    if (!mounted || _isLocked) return;
-
+    if (!_isFullscreen || _isLocked) return;
     final screenHeight = MediaQuery.of(context).size.height;
-    final deltaY = details.delta.dy;
-    final brightnessChange = -(deltaY / screenHeight) * 2; // 负号因为向上滑动是负值
-
+    final brightnessChange = -(details.delta.dy / screenHeight) * 2;
     setState(() {
       _currentBrightness = (_currentBrightness + brightnessChange).clamp(0.0, 1.0);
       _showBrightnessIndicator = true;
     });
-
     ScreenBrightness().setScreenBrightness(_currentBrightness);
     _startBrightnessHideTimer();
   }
 
   void _onBrightnessSwipeEnd(DragEndDetails details) {
-    if (!mounted || _isLocked) return;
+    if (!_isFullscreen || _isLocked) return;
     _startBrightnessHideTimer();
-    _startHideTimer(); // 重新启动 controls 自动隐藏计时器
+    _startHideTimer();
   }
 
   void _startBrightnessHideTimer() {
     _brightnessHideTimer?.cancel();
     _brightnessHideTimer = Timer(const Duration(seconds: 2), () {
       if (mounted) {
-        setState(() {
-          _showBrightnessIndicator = false;
-        });
+        setState(() => _showBrightnessIndicator = false);
       }
     });
   }
 
+  Future<void> _togglePlayPause() async {
+    _onUserInteraction();
+    if (_isPlaying) {
+      await widget.player.pause();
+      widget.onPause?.call();
+    } else {
+      await widget.player.play();
+    }
+  }
+
+  void _enterFullscreen() {
+    widget.state.enterFullscreen();
+    widget.onFullscreenChange(true);
+    _onUserInteraction();
+  }
+
   void _exitFullscreen() {
-    if (!mounted) return;
+    widget.state.exitFullscreen();
     widget.onFullscreenChange(false);
+    _onUserInteraction();
   }
 
   Future<void> _showDLNADialog() async {
-    if (widget.controller.isPlaying() == true) {
-      widget.controller.pause();
+    if (_isPlaying) {
+      await widget.player.pause();
       widget.onPause?.call();
     }
-
-    final isCurrentlyFullscreen = widget.controller.isFullScreen;
-    if (isCurrentlyFullscreen) {
-      // 设置标记位，表示正在显示 DLNA 对话框
-      _isShowingDLNADialog = true;
+    if (_isFullscreen) {
       _exitFullscreen();
-      // 退出全屏后会触发重建，在重建完成后会调用 _showDLNADialogInternal
-    } else {
-      // 非全屏状态，直接显示对话框
-      await _showDLNADialogInternal();
+      await Future.delayed(const Duration(milliseconds: 250));
     }
+    final resumePos = widget.player.state.position;
+    if (!mounted) return;
+    await showDialog(
+      context: context,
+      builder: (context) => DLNADeviceDialog(
+        currentUrl: widget.videoUrl,
+        resumePosition: resumePos,
+        videoTitle: widget.videoTitle,
+        currentEpisodeIndex: widget.currentEpisodeIndex,
+        totalEpisodes: widget.totalEpisodes,
+        sourceName: widget.sourceName,
+        onCastStarted: widget.onCastStarted,
+      ),
+    );
   }
 
-  Future<void> _showDLNADialogInternal() async {
-    // 获取当前播放位置
-    final resumePos = widget.controller.videoPlayerController?.value.position;
-
-    if (mounted) {
-      await showDialog(
-        context: context,
-        builder: (context) => DLNADeviceDialog(
-          currentUrl: widget.videoUrl,
-          resumePosition: resumePos,
-          videoTitle: widget.videoTitle,
-          currentEpisodeIndex: widget.currentEpisodeIndex,
-          totalEpisodes: widget.totalEpisodes,
-          sourceName: widget.sourceName,
-          onCastStarted: widget.onCastStarted,
-        ),
-      );
-      // 对话框关闭后，重置标记位
-      _isShowingDLNADialog = false;
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final isFullscreen = widget.controller.isFullScreen;
-
-    // 在 PIP 模式下不显示任何控件 - 使用 VideoPlayerValue 的 isPip 方法
-    final isPipMode =
-        widget.controller.videoPlayerController?.value.isPip ?? false;
-    if (isPipMode) {
-      return IgnorePointer(
-        child: Container(color: Colors.transparent),
-      );
-    }
-
-    // 如果正在加载视频，只显示加载界面
-    if (widget.isLoadingVideo) {
-      return Container(
-        color: Colors.black.withValues(alpha: 0.7),
-        child: const Center(
+  Future<void> _showSpeedDialog() async {
+    final speeds = [0.5, 0.75, 1.0, 1.5, 2.0];
+    final currentSpeed = widget.playbackSpeedListenable.value;
+    final result = await showModalBottomSheet<double>(
+      context: context,
+      builder: (context) {
+        final isDark = Theme.of(context).brightness == Brightness.dark;
+        return SafeArea(
           child: Column(
             mainAxisSize: MainAxisSize.min,
-            children: [
-              CircularProgressIndicator(
-                color: Colors.white,
-                strokeWidth: 3,
-              ),
-              SizedBox(height: 16),
-              Text(
-                '视频加载中...',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 14,
+            children: speeds.map((speed) {
+              final selected = (speed - currentSpeed).abs() < 0.01;
+              return ListTile(
+                title: Text(
+                  '${speed}x',
+                  style: TextStyle(
+                    color: selected
+                        ? Colors.red
+                        : (isDark ? Colors.white : Colors.black87),
+                    fontWeight: selected ? FontWeight.bold : FontWeight.normal,
+                  ),
                 ),
-              ),
-            ],
+                onTap: () => Navigator.of(context).pop(speed),
+              );
+            }).toList(),
           ),
-        ),
-      );
-    }
-
-    return PopScope(
-      canPop: !isFullscreen || !_isLocked,
-      onPopInvokedWithResult: (didPop, result) async {
-        if (!didPop && isFullscreen && _isLocked) {
-          setState(() {
-            _isLocked = false;
-            _controlsVisible = true;
-          });
-          _startHideTimer();
-        }
+        );
       },
-      child: Stack(
-        children: [
-          // 背景层 - 处理长按和滑动手势
-          Positioned.fill(
-            child: Row(
-              children: [
-                // 左侧区域 - 处理亮度调节和通用手势（仅在全屏时）
-                if (isFullscreen)
-                  Expanded(
-                    flex: 1,
-                    child: GestureDetector(
-                      onLongPressStart:
-                          (_isInPipMode || _isLocked) ? null : _onLongPressStart,
-                      onLongPressEnd:
-                          (_isInPipMode || _isLocked) ? null : _onLongPressEnd,
-                      onLongPressCancel: (_isInPipMode || _isLocked)
-                          ? null
-                          : () {
-                              if (_isLongPressing) {
-                                _onLongPressEnd(const LongPressEndDetails());
-                              }
-                            },
-                      onVerticalDragStart: _onBrightnessSwipeStart,
-                      onVerticalDragUpdate: _onBrightnessSwipeUpdate,
-                      onVerticalDragEnd: _onBrightnessSwipeEnd,
-                      onHorizontalDragStart:
-                          (_isInPipMode || _isLocked) ? null : _onSwipeStart,
-                      onHorizontalDragUpdate:
-                          (_isInPipMode || _isLocked) ? null : _onSwipeUpdate,
-                      onHorizontalDragEnd:
-                          (_isInPipMode || _isLocked) ? null : _onSwipeEnd,
-                      onTap: _isInPipMode ? null : _onBlankAreaTap,
-                      behavior: HitTestBehavior.opaque,
-                      child: Container(
-                        color: Colors.transparent,
-                      ),
-                    ),
-                  ),
-                // 中间区域 - 处理长按和水平滑动
-                Expanded(
-                  flex: isFullscreen ? 2 : 1,
-                  child: GestureDetector(
-                    onLongPressStart:
-                        (_isInPipMode || _isLocked) ? null : _onLongPressStart,
-                    onLongPressEnd:
-                        (_isInPipMode || _isLocked) ? null : _onLongPressEnd,
-                    onLongPressCancel: (_isInPipMode || _isLocked)
-                        ? null
-                        : () {
-                            if (_isLongPressing) {
-                              _onLongPressEnd(const LongPressEndDetails());
-                            }
-                          },
-                    onHorizontalDragStart:
-                        (_isInPipMode || _isLocked) ? null : _onSwipeStart,
-                    onHorizontalDragUpdate:
-                        (_isInPipMode || _isLocked) ? null : _onSwipeUpdate,
-                    onHorizontalDragEnd:
-                        (_isInPipMode || _isLocked) ? null : _onSwipeEnd,
-                    onTap: _isInPipMode ? null : _onBlankAreaTap,
-                    behavior: HitTestBehavior.opaque,
-                    child: Container(
-                      color: Colors.transparent,
-                    ),
-                  ),
-                ),
-                // 右侧区域 - 处理音量调节和通用手势（仅在全屏时）
-                if (isFullscreen)
-                  Expanded(
-                    flex: 1,
-                    child: GestureDetector(
-                      onLongPressStart:
-                          (_isInPipMode || _isLocked) ? null : _onLongPressStart,
-                      onLongPressEnd:
-                          (_isInPipMode || _isLocked) ? null : _onLongPressEnd,
-                      onLongPressCancel: (_isInPipMode || _isLocked)
-                          ? null
-                          : () {
-                              if (_isLongPressing) {
-                                _onLongPressEnd(const LongPressEndDetails());
-                              }
-                            },
-                      onVerticalDragStart: _onVolumeSwipeStart,
-                      onVerticalDragUpdate: _onVolumeSwipeUpdate,
-                      onVerticalDragEnd: _onVolumeSwipeEnd,
-                      onHorizontalDragStart:
-                          (_isInPipMode || _isLocked) ? null : _onSwipeStart,
-                      onHorizontalDragUpdate:
-                          (_isInPipMode || _isLocked) ? null : _onSwipeUpdate,
-                      onHorizontalDragEnd:
-                          (_isInPipMode || _isLocked) ? null : _onSwipeEnd,
-                      onTap: _isInPipMode ? null : _onBlankAreaTap,
-                      behavior: HitTestBehavior.opaque,
-                      child: Container(
-                        color: Colors.transparent,
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-          // 顶部渐变背景 - 从上往下（半透明黑色到完全透明）
-          Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            child: AnimatedOpacity(
-              opacity: (_controlsVisible && !_isLocked) ? 1.0 : 0.0,
-              duration: const Duration(milliseconds: 200),
-              child: IgnorePointer(
-                child: Container(
-                  height: isFullscreen ? 120 : 80,
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [
-                        Colors.black.withValues(alpha: 0.6),
-                        Colors.transparent,
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-          // 底部渐变背景 - 从下往上（半透明黑色到完全透明）
-          Positioned(
-            bottom: 0,
-            left: 0,
-            right: 0,
-            child: AnimatedOpacity(
-              opacity: (_controlsVisible && !_isLocked) ? 1.0 : 0.0,
-              duration: const Duration(milliseconds: 200),
-              child: IgnorePointer(
-                child: Container(
-                  height: isFullscreen ? 140 : 100,
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.bottomCenter,
-                      end: Alignment.topCenter,
-                      colors: [
-                        Colors.black.withValues(alpha: 0.6),
-                        Colors.transparent,
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-          // 长按倍速提示
-          if (_isLongPressing && !_isLocked)
-            Positioned(
-              top: 10,
-              left: 0,
-              right: 0,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Text(
-                    '2x',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                  Icon(
-                    Icons.fast_forward,
-                    color: Colors.white,
-                    size: isFullscreen ? 32 : 28,
-                  ),
-                ],
-              ),
-            ),
-          // 左侧亮度指示器 - 在全屏时显示
-          if (isFullscreen && _showBrightnessIndicator && !_isLocked)
-            Positioned(
-              left: 16.0,
-              top: 0,
-              bottom: 0,
-              child: Center(
-                child: Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withValues(alpha: 0.7),
-                    borderRadius: BorderRadius.circular(24),
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        _currentBrightness < 0.5
-                            ? Icons.brightness_low
-                            : Icons.brightness_high,
-                        color: Colors.white,
-                        size: 24,
-                      ),
-                      const SizedBox(height: 8),
-                      SizedBox(
-                        height: 100,
-                        width: 4,
-                        child: Stack(
-                          children: [
-                            // 背景
-                            Container(
-                              decoration: BoxDecoration(
-                                color: Colors.white.withValues(alpha: 0.3),
-                                borderRadius: BorderRadius.circular(2),
-                              ),
-                            ),
-                            // 当前亮度
-                            Align(
-                              alignment: Alignment.bottomCenter,
-                              child: FractionallySizedBox(
-                                heightFactor: _currentBrightness,
-                                child: Container(
-                                  decoration: BoxDecoration(
-                                    color: Colors.white,
-                                    borderRadius: BorderRadius.circular(2),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        '${(_currentBrightness * 100).round()}',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          // 全屏锁定按钮和音量指示器 - 在全屏时显示（同一位置）
-          if (isFullscreen)
-            Positioned(
-              right: 16.0,
-              top: 0,
-              bottom: 0,
-              child: Center(
-                child: AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 200),
-                  child: _showVolumeIndicator && !_isLocked
-                      ? Container(
-                          key: const ValueKey('volume'),
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: Colors.black.withValues(alpha: 0.7),
-                            borderRadius: BorderRadius.circular(24),
-                          ),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                _currentVolume == 0
-                                    ? Icons.volume_off
-                                    : _currentVolume < 0.5
-                                        ? Icons.volume_down
-                                        : Icons.volume_up,
-                                color: Colors.white,
-                                size: 24,
-                              ),
-                              const SizedBox(height: 8),
-                              SizedBox(
-                                height: 100,
-                                width: 4,
-                                child: Stack(
-                                  children: [
-                                    // 背景
-                                    Container(
-                                      decoration: BoxDecoration(
-                                        color: Colors.white.withValues(alpha: 0.3),
-                                        borderRadius: BorderRadius.circular(2),
-                                      ),
-                                    ),
-                                    // 当前音量
-                                    Align(
-                                      alignment: Alignment.bottomCenter,
-                                      child: FractionallySizedBox(
-                                        heightFactor: _currentVolume,
-                                        child: Container(
-                                          decoration: BoxDecoration(
-                                            color: Colors.white,
-                                            borderRadius: BorderRadius.circular(2),
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                '${(_currentVolume * 100).round()}',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ],
-                          ),
-                        )
-                      : AnimatedOpacity(
-                          key: const ValueKey('lock'),
-                          opacity: _controlsVisible ? 1.0 : 0.0,
-                          duration: const Duration(milliseconds: 200),
-                          child: IgnorePointer(
-                            ignoring: !_controlsVisible,
-                            child: GestureDetector(
-                              onTap: () {
-                                setState(() {
-                                  _isLocked = !_isLocked;
-                                  if (_isLocked) {
-                                    // 锁定时启动自动隐藏计时器
-                                    _startHideTimer();
-                                  } else {
-                                    // 解锁时显示控件并启动计时器
-                                    _controlsVisible = true;
-                                    _startHideTimer();
-                                  }
-                                });
-                              },
-                              behavior: HitTestBehavior.opaque,
-                              child: Container(
-                                padding: const EdgeInsets.all(12),
-                                decoration: BoxDecoration(
-                                  color: Colors.black.withValues(alpha: 0.5),
-                                  borderRadius: BorderRadius.circular(24),
-                                ),
-                                child: Icon(
-                                  _isLocked ? Icons.lock : Icons.lock_open,
-                                  color: Colors.white,
-                                  size: 24,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                ),
-              ),
-            ),
-          Positioned(
-            top: isFullscreen ? 8 : 4,
-            left: isFullscreen ? 16.0 : 8.0,
-            child: AnimatedOpacity(
-              opacity: (_controlsVisible && !_isLocked) ? 1.0 : 0.0,
-              duration: const Duration(milliseconds: 200),
-              child: IgnorePointer(
-                ignoring: !_controlsVisible || _isLocked,
-                child: GestureDetector(
-                  onTap: () async {
-                    _onUserInteraction();
-                    if (isFullscreen) {
-                      _exitFullscreen();
-                    } else {
-                      widget.onBackPressed?.call();
-                    }
-                  },
-                  behavior: HitTestBehavior.opaque,
-                  child: Container(
-                    padding: const EdgeInsets.all(8),
-                    child: Icon(
-                      Icons.arrow_back,
-                      color: Colors.white,
-                      size: isFullscreen ? 24 : 20,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-          Positioned(
-            top: isFullscreen ? 8 : 4,
-            right: isFullscreen ? 16.0 : 8.0,
-            child: AnimatedOpacity(
-              opacity: (_controlsVisible && !_isLocked) ? 1.0 : 0.0,
-              duration: const Duration(milliseconds: 200),
-              child: IgnorePointer(
-                ignoring: !_controlsVisible || _isLocked,
-                child: GestureDetector(
-                  onTap: () async {
-                    _onUserInteraction();
-                    await _showDLNADialog();
-                  },
-                  behavior: HitTestBehavior.opaque,
-                  child: Container(
-                    padding: const EdgeInsets.all(8),
-                    child: Icon(
-                      Icons.cast,
-                      color: Colors.white,
-                      size: isFullscreen ? 24 : 20,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-          Positioned(
-            top: 0,
-            bottom: 0,
-            left: 0,
-            right: 0,
-            child: Center(
-              child: AnimatedOpacity(
-                opacity: (!_isLocked &&
-                        (!(widget.controller.isPlaying() ?? false) ||
-                            _controlsVisible))
-                    ? 1.0
-                    : 0.0,
-                duration: const Duration(milliseconds: 200),
-                child: IgnorePointer(
-                  ignoring: _isLocked ||
-                      ((widget.controller.isPlaying() ?? false) &&
-                          !_controlsVisible),
-                  child: GestureDetector(
-                    onTap: () {
-                      _onUserInteraction();
-                      if (widget.controller.isPlaying() ?? false) {
-                        widget.controller.pause();
-                        widget.onPause?.call();
-                      } else {
-                        widget.controller.play();
-                      }
-                    },
-                    child: Icon(
-                      (widget.controller.isPlaying() ?? false)
-                          ? Icons.pause
-                          : Icons.play_arrow,
-                      color: Colors.white,
-                      size: isFullscreen ? 64 : 48,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-          Positioned(
-            bottom: isFullscreen ? 58.0 : 42.0,
-            left: 0,
-            right: 0,
-            child: AnimatedOpacity(
-              opacity: (_controlsVisible && !_isLocked) ? 1.0 : 0.0,
-              duration: const Duration(milliseconds: 200),
-              child: IgnorePointer(
-                ignoring: !_controlsVisible || _isLocked,
-                child: Container(
-                  height: 24,
-                  margin: const EdgeInsets.symmetric(horizontal: 16),
-                  child: CustomVideoProgressBar(
-                    controller: widget.controller,
-                    onDragStart: _onSeekStart,
-                    onDragEnd: _onSeekEnd,
-                    onDragUpdate: () {
-                      if (!_controlsVisible) {
-                        setState(() {
-                          _controlsVisible = true;
-                        });
-                      }
-                      _hideTimer?.cancel();
-                    },
-                    onPositionUpdate: (duration) {
-                      setState(() {
-                        _dragPosition = duration;
-                      });
-                    },
-                    dragPosition: _dragPosition,
-                    isSeekingViaSwipe: _isSeekingViaSwipe,
-                    live: widget.live,
-                  ),
-                ),
-              ),
-            ),
-          ),
-          Positioned(
-            bottom: isFullscreen ? 4.0 : -6.0,
-            left: 0,
-            right: 0,
-            child: AnimatedOpacity(
-              opacity: (_controlsVisible && !_isLocked) ? 1.0 : 0.0,
-              duration: const Duration(milliseconds: 200),
-              child: IgnorePointer(
-                ignoring: !_controlsVisible || _isLocked,
-                child: GestureDetector(
-                  onTap: () {},
-                  behavior: HitTestBehavior.opaque,
-                  child: Padding(
-                    padding: EdgeInsets.only(
-                      left: isFullscreen ? 16.0 : 8.0,
-                      right: isFullscreen ? 16.0 : 8.0,
-                      top: isFullscreen ? 0.0 : 0.0,
-                      bottom: isFullscreen ? 8.0 : 8.0,
-                    ),
-                    child: Row(
-                      children: [
-                        GestureDetector(
-                          onTap: () {
-                            _onUserInteraction();
-                            if (widget.controller.isPlaying() ?? false) {
-                              widget.controller.pause();
-                              widget.onPause?.call();
-                            } else {
-                              widget.controller.play();
-                            }
-                          },
-                          behavior: HitTestBehavior.opaque,
-                          child: Container(
-                            padding: const EdgeInsets.all(8),
-                            child: Icon(
-                              (widget.controller.isPlaying() ?? false)
-                                  ? Icons.pause
-                                  : Icons.play_arrow,
-                              color: Colors.white,
-                              size: isFullscreen ? 28 : 24,
-                            ),
-                          ),
-                        ),
-                        if (!widget.isLastEpisode && !widget.live)
-                          Transform.translate(
-                            offset: const Offset(-8, 0),
-                            child: GestureDetector(
-                              onTap: () {
-                                _onUserInteraction();
-                                widget.onNextEpisode?.call();
-                              },
-                              behavior: HitTestBehavior.opaque,
-                              child: Container(
-                                padding: const EdgeInsets.all(8),
-                                child: Icon(
-                                  Icons.skip_next,
-                                  color: Colors.white,
-                                  size: isFullscreen ? 28 : 24,
-                                ),
-                              ),
-                            ),
-                          ),
-                        if (!widget.live)
-                          Expanded(
-                            child: _buildPositionIndicator(),
-                          ),
-                        if (widget.live) const Spacer(),
-                        if (!widget.live)
-                          IconButton(
-                            icon: Icon(
-                              Icons.speed,
-                              color: Colors.white,
-                              size: isFullscreen ? 22 : 20,
-                            ),
-                            onPressed: () async {
-                              _onUserInteraction();
-                              await _showSpeedDialog();
-                            },
-                          ),
-                        if (!isFullscreen)
-                          GestureDetector(
-                            onTap: () {
-                              _onUserInteraction();
-                              if (widget.betterPlayerKey != null) {
-                                widget.controller.enablePictureInPicture(
-                                    widget.betterPlayerKey!);
-                              }
-                            },
-                            behavior: HitTestBehavior.opaque,
-                            child: Container(
-                              padding: const EdgeInsets.all(8),
-                              child: const Icon(
-                                Icons.picture_in_picture_alt,
-                                color: Colors.white,
-                                size: 22,
-                              ),
-                            ),
-                          ),
-                        GestureDetector(
-                          onTap: () {
-                            _onUserInteraction();
-                            if (isFullscreen) {
-                              _exitFullscreen();
-                            } else {
-                              widget.onFullscreenChange(true);
-                            }
-                          },
-                          behavior: HitTestBehavior.opaque,
-                          child: Container(
-                            padding: const EdgeInsets.all(8),
-                            child: Icon(
-                              isFullscreen
-                                  ? Icons.fullscreen_exit
-                                  : Icons.fullscreen,
-                              color: Colors.white,
-                              size: isFullscreen ? 28 : 24,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
     );
-  }
-
-  Widget _buildPositionIndicator() {
-    final position = _dragPosition ??
-        widget.controller.videoPlayerController?.value.position ??
-        Duration.zero;
-    final duration = widget.controller.videoPlayerController?.value.duration ??
-        Duration.zero;
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8.0),
-      child: Text(
-        '${_formatDuration(position)} / ${_formatDuration(duration)}',
-        style: const TextStyle(
-          color: Colors.white,
-          fontSize: 12,
-        ),
-      ),
-    );
+    if (result != null) {
+      await widget.onSetSpeed(result);
+    }
   }
 
   String _formatDuration(Duration duration) {
@@ -1219,71 +402,592 @@ class _CustomBetterPlayerControlsState
     final hours = duration.inHours;
     final minutes = duration.inMinutes.remainder(60);
     final seconds = duration.inSeconds.remainder(60);
-
     if (hours > 0) {
       return '$hours:${twoDigits(minutes)}:${twoDigits(seconds)}';
     }
     return '${twoDigits(minutes)}:${twoDigits(seconds)}';
   }
 
-  Future<void> _showSpeedDialog() async {
-    final speeds = [0.5, 0.75, 1.0, 1.5, 2.0];
-    final currentSpeed =
-        widget.controller.videoPlayerController?.value.speed ?? 1.0;
+  @override
+  Widget build(BuildContext context) {
+    if (widget.isLoadingVideo) {
+      return Container(
+        color: Colors.black.withValues(alpha: 0.7),
+        child: const Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircularProgressIndicator(color: Colors.white, strokeWidth: 3),
+              SizedBox(height: 16),
+              Text('视频加载中...', style: TextStyle(color: Colors.white, fontSize: 14)),
+            ],
+          ),
+        ),
+      );
+    }
 
-    final chosenSpeed = await showModalBottomSheet<double>(
-      context: context,
-      builder: (context) {
-        final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    Widget content = Stack(
+      children: [
+        Positioned.fill(child: _buildGestureLayer()),
+        _buildTopGradient(),
+        _buildBottomGradient(),
+        _buildBackButton(),
+        _buildCastButton(),
+        _buildCenterPlayPause(),
+        _buildProgressBar(),
+        _buildBottomControls(),
+        if (_isLongPressing && !_isLocked) _buildLongPressIndicator(),
+        if (_isFullscreen && _showBrightnessIndicator && !_isLocked)
+          _buildBrightnessIndicator(),
+        if (_isFullscreen) _buildRightOverlay(),
+      ],
+    );
 
-        return SafeArea(
-          child: Container(
-            constraints: BoxConstraints(
-              maxHeight: MediaQuery.of(context).size.height * 0.6,
+    if (_isFullscreen) {
+      content = PopScope(
+        canPop: !_isLocked,
+        onPopInvokedWithResult: (didPop, result) async {
+          if (!didPop && _isLocked) {
+            setState(() {
+              _isLocked = false;
+              _controlsVisible = true;
+            });
+            _startHideTimer();
+          }
+        },
+        child: content,
+      );
+    }
+
+    return content;
+  }
+
+  Widget _buildGestureLayer() {
+    return Positioned.fill(
+      child: Row(
+        children: [
+          if (_isFullscreen)
+            Expanded(
+              flex: 1,
+              child: GestureDetector(
+                onTap: _toggleControlsVisibility,
+                onLongPressStart: _onLongPressStart,
+                onLongPressEnd: _onLongPressEnd,
+                onLongPressCancel: () {
+                  if (_isLongPressing) {
+                    _onLongPressEnd(const LongPressEndDetails());
+                  }
+                },
+                onHorizontalDragStart: _onSwipeStart,
+                onHorizontalDragUpdate: _onSwipeUpdate,
+                onHorizontalDragEnd: _onSwipeEnd,
+                onVerticalDragStart: _onBrightnessSwipeStart,
+                onVerticalDragUpdate: _onBrightnessSwipeUpdate,
+                onVerticalDragEnd: _onBrightnessSwipeEnd,
+                behavior: HitTestBehavior.opaque,
+              ),
             ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
+          Expanded(
+            flex: _isFullscreen ? 2 : 1,
+            child: GestureDetector(
+              onTap: _toggleControlsVisibility,
+              onLongPressStart: _onLongPressStart,
+              onLongPressEnd: _onLongPressEnd,
+              onLongPressCancel: () {
+                if (_isLongPressing) {
+                  _onLongPressEnd(const LongPressEndDetails());
+                }
+              },
+              onHorizontalDragStart: _onSwipeStart,
+              onHorizontalDragUpdate: _onSwipeUpdate,
+              onHorizontalDragEnd: _onSwipeEnd,
+              behavior: HitTestBehavior.opaque,
+            ),
+          ),
+          if (_isFullscreen)
+            Expanded(
+              flex: 1,
+              child: GestureDetector(
+                onTap: _toggleControlsVisibility,
+                onLongPressStart: _onLongPressStart,
+                onLongPressEnd: _onLongPressEnd,
+                onLongPressCancel: () {
+                  if (_isLongPressing) {
+                    _onLongPressEnd(const LongPressEndDetails());
+                  }
+                },
+                onHorizontalDragStart: _onSwipeStart,
+                onHorizontalDragUpdate: _onSwipeUpdate,
+                onHorizontalDragEnd: _onSwipeEnd,
+                onVerticalDragStart: _onVolumeSwipeStart,
+                onVerticalDragUpdate: _onVolumeSwipeUpdate,
+                onVerticalDragEnd: _onVolumeSwipeEnd,
+                behavior: HitTestBehavior.opaque,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTopGradient() {
+    return Positioned(
+      top: 0,
+      left: 0,
+      right: 0,
+      child: AnimatedOpacity(
+        opacity: (_controlsVisible && !_isLocked) ? 1.0 : 0.0,
+        duration: const Duration(milliseconds: 200),
+        child: IgnorePointer(
+          child: Container(
+            height: _isFullscreen ? 120 : 80,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Colors.black.withValues(alpha: 0.6),
+                  Colors.transparent,
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBottomGradient() {
+    return Positioned(
+      bottom: 0,
+      left: 0,
+      right: 0,
+      child: AnimatedOpacity(
+        opacity: (_controlsVisible && !_isLocked) ? 1.0 : 0.0,
+        duration: const Duration(milliseconds: 200),
+        child: IgnorePointer(
+          child: Container(
+            height: _isFullscreen ? 140 : 100,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.bottomCenter,
+                end: Alignment.topCenter,
+                colors: [
+                  Colors.black.withValues(alpha: 0.6),
+                  Colors.transparent,
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBackButton() {
+    return Positioned(
+      top: _isFullscreen ? 8 : 4,
+      left: _isFullscreen ? 16.0 : 8.0,
+      child: AnimatedOpacity(
+        opacity: (_controlsVisible && !_isLocked) ? 1.0 : 0.0,
+        duration: const Duration(milliseconds: 200),
+        child: IgnorePointer(
+          ignoring: !_controlsVisible || _isLocked,
+          child: GestureDetector(
+            onTap: () {
+              _onUserInteraction();
+              if (_isFullscreen) {
+                _exitFullscreen();
+              } else {
+                widget.onBackPressed?.call();
+              }
+            },
+            behavior: HitTestBehavior.opaque,
+            child: Container(
+              padding: const EdgeInsets.all(8),
+              child: Icon(
+                Icons.arrow_back,
+                color: Colors.white,
+                size: _isFullscreen ? 24 : 20,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCastButton() {
+    return Positioned(
+      top: _isFullscreen ? 8 : 4,
+      right: _isFullscreen ? 16.0 : 8.0,
+      child: AnimatedOpacity(
+        opacity: (_controlsVisible && !_isLocked) ? 1.0 : 0.0,
+        duration: const Duration(milliseconds: 200),
+        child: IgnorePointer(
+          ignoring: !_controlsVisible || _isLocked,
+          child: GestureDetector(
+            onTap: () async {
+              _onUserInteraction();
+              await _showDLNADialog();
+            },
+            behavior: HitTestBehavior.opaque,
+            child: Container(
+              padding: const EdgeInsets.all(8),
+              child: Icon(
+                Icons.cast,
+                color: Colors.white,
+                size: _isFullscreen ? 24 : 20,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCenterPlayPause() {
+    return Positioned.fill(
+      child: Center(
+        child: AnimatedOpacity(
+          opacity: (!_isLocked && (!_isPlaying || _controlsVisible)) ? 1.0 : 0.0,
+          duration: const Duration(milliseconds: 200),
+          child: IgnorePointer(
+            ignoring: _isLocked || (_isPlaying && !_controlsVisible),
+            child: GestureDetector(
+              onTap: _togglePlayPause,
+              child: Icon(
+                _isPlaying ? Icons.pause : Icons.play_arrow,
+                color: Colors.white,
+                size: _isFullscreen ? 64 : 48,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildProgressBar() {
+    return Positioned(
+      bottom: _isFullscreen ? 58.0 : 42.0,
+      left: 0,
+      right: 0,
+      child: AnimatedOpacity(
+        opacity: (_controlsVisible && !_isLocked) ? 1.0 : 0.0,
+        duration: const Duration(milliseconds: 200),
+        child: IgnorePointer(
+          ignoring: !_controlsVisible || _isLocked,
+          child: Container(
+            height: 24,
+            margin: const EdgeInsets.symmetric(horizontal: 16),
+            child: _MobileVideoProgressBar(
+              player: widget.player,
+              live: widget.live,
+              onDragStart: () {
+                setState(() => _controlsVisible = true);
+                _hideTimer?.cancel();
+              },
+              onDragEnd: _startHideTimer,
+              onDragUpdate: () {
+                if (!_controlsVisible) {
+                  setState(() => _controlsVisible = true);
+                }
+                _hideTimer?.cancel();
+              },
+              onPositionUpdate: (duration) {
+                setState(() => _dragPosition = duration);
+              },
+              dragPosition: _dragPosition,
+              isSeekingViaSwipe: _isSeekingViaSwipe,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBottomControls() {
+    final position = _dragPosition ?? _position;
+    final duration = _duration;
+    return Positioned(
+      bottom: _isFullscreen ? 4.0 : -6.0,
+      left: 0,
+      right: 0,
+      child: AnimatedOpacity(
+        opacity: (_controlsVisible && !_isLocked) ? 1.0 : 0.0,
+        duration: const Duration(milliseconds: 200),
+        child: IgnorePointer(
+          ignoring: !_controlsVisible || _isLocked,
+          child: Padding(
+            padding: EdgeInsets.only(
+              left: _isFullscreen ? 16.0 : 8.0,
+              right: _isFullscreen ? 16.0 : 8.0,
+              bottom: _isFullscreen ? 8.0 : 8.0,
+            ),
+            child: Row(
               children: [
-                Flexible(
-                  child: ListView(
-                    shrinkWrap: true,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    children: speeds.map((speed) {
-                      final isSelected = speed == currentSpeed;
-                      return ListTile(
-                        title: Text(
-                          '${speed}x',
-                          style: TextStyle(
-                            color: isSelected
-                                ? Colors.red
-                                : (isDarkMode ? Colors.white : Colors.black),
-                            fontWeight: isSelected
-                                ? FontWeight.bold
-                                : FontWeight.normal,
-                          ),
+                GestureDetector(
+                  onTap: _togglePlayPause,
+                  behavior: HitTestBehavior.opaque,
+                  child: Container(
+                    padding: const EdgeInsets.all(8),
+                    child: Icon(
+                      _isPlaying ? Icons.pause : Icons.play_arrow,
+                      color: Colors.white,
+                      size: _isFullscreen ? 28 : 24,
+                    ),
+                  ),
+                ),
+                if (!widget.isLastEpisode && !widget.live)
+                  Transform.translate(
+                    offset: const Offset(-8, 0),
+                    child: GestureDetector(
+                      onTap: () {
+                        _onUserInteraction();
+                        widget.onNextEpisode?.call();
+                      },
+                      behavior: HitTestBehavior.opaque,
+                      child: Container(
+                        padding: const EdgeInsets.all(8),
+                        child: Icon(
+                          Icons.skip_next,
+                          color: Colors.white,
+                          size: _isFullscreen ? 28 : 24,
                         ),
-                        onTap: () {
-                          Navigator.of(context).pop(speed);
-                        },
-                      );
-                    }).toList(),
+                      ),
+                    ),
+                  ),
+                if (!widget.live)
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                      child: Text(
+                        '${_formatDuration(position)} / ${_formatDuration(duration)}',
+                        style: const TextStyle(color: Colors.white, fontSize: 12),
+                      ),
+                    ),
+                  ),
+                if (widget.live) const Spacer(),
+                if (!widget.live)
+                  IconButton(
+                    icon: Icon(
+                      Icons.speed,
+                      color: Colors.white,
+                      size: _isFullscreen ? 22 : 20,
+                    ),
+                    onPressed: () async {
+                      _onUserInteraction();
+                      await _showSpeedDialog();
+                    },
+                  ),
+                GestureDetector(
+                  onTap: () {
+                    _onUserInteraction();
+                    if (_isFullscreen) {
+                      _exitFullscreen();
+                    } else {
+                      _enterFullscreen();
+                    }
+                  },
+                  behavior: HitTestBehavior.opaque,
+                  child: Container(
+                    padding: const EdgeInsets.all(8),
+                    child: Icon(
+                      _isFullscreen ? Icons.fullscreen_exit : Icons.fullscreen,
+                      color: Colors.white,
+                      size: _isFullscreen ? 28 : 24,
+                    ),
                   ),
                 ),
               ],
             ),
           ),
-        );
-      },
+        ),
+      ),
     );
+  }
 
-    if (chosenSpeed != null) {
-      widget.controller.setSpeed(chosenSpeed);
+  Widget _buildLongPressIndicator() {
+    return const Positioned(
+      top: 10,
+      left: 0,
+      right: 0,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text('2x', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+          SizedBox(width: 6),
+          Icon(Icons.fast_forward, color: Colors.white, size: 32),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBrightnessIndicator() {
+    return Positioned(
+      left: 16.0,
+      top: 0,
+      bottom: 0,
+      child: Center(
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Colors.black.withValues(alpha: 0.7),
+            borderRadius: BorderRadius.circular(24),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                _currentBrightness < 0.5 ? Icons.brightness_low : Icons.brightness_high,
+                color: Colors.white,
+                size: 24,
+              ),
+              const SizedBox(height: 8),
+              SizedBox(
+                height: 100,
+                width: 4,
+                child: Stack(
+                  children: [
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.3),
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                    Align(
+                      alignment: Alignment.bottomCenter,
+                      child: FractionallySizedBox(
+                        heightFactor: _currentBrightness,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(2),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                '${(_currentBrightness * 100).round()}',
+                style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRightOverlay() {
+    if (_showVolumeIndicator && !_isLocked) {
+      return Positioned(
+        right: 16.0,
+        top: 0,
+        bottom: 0,
+        child: Center(
+          child: Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.black.withValues(alpha: 0.7),
+              borderRadius: BorderRadius.circular(24),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  _currentVolume == 0
+                      ? Icons.volume_off
+                      : _currentVolume < 0.5
+                          ? Icons.volume_down
+                          : Icons.volume_up,
+                  color: Colors.white,
+                  size: 24,
+                ),
+                const SizedBox(height: 8),
+                SizedBox(
+                  height: 100,
+                  width: 4,
+                  child: Stack(
+                    children: [
+                      Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.3),
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                      Align(
+                        alignment: Alignment.bottomCenter,
+                        child: FractionallySizedBox(
+                          heightFactor: _currentVolume,
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(2),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  '${(_currentVolume * 100).round()}',
+                  style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
     }
+
+    return Positioned(
+      right: 16.0,
+      top: 0,
+      bottom: 0,
+      child: Center(
+        child: AnimatedOpacity(
+          opacity: _controlsVisible ? 1.0 : 0.0,
+          duration: const Duration(milliseconds: 200),
+          child: IgnorePointer(
+            ignoring: !_controlsVisible,
+            child: GestureDetector(
+              onTap: () {
+                setState(() {
+                  _isLocked = !_isLocked;
+                  _controlsVisible = true;
+                });
+                _startHideTimer();
+              },
+              behavior: HitTestBehavior.opaque,
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.5),
+                  borderRadius: BorderRadius.circular(24),
+                ),
+                child: Icon(
+                  _isLocked ? Icons.lock : Icons.lock_open,
+                  color: Colors.white,
+                  size: 24,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 
-class CustomVideoProgressBar extends StatefulWidget {
-  final BetterPlayerController controller;
+class _MobileVideoProgressBar extends StatefulWidget {
+  final Player player;
   final VoidCallback? onDragStart;
   final VoidCallback? onDragEnd;
   final VoidCallback? onDragUpdate;
@@ -1292,9 +996,8 @@ class CustomVideoProgressBar extends StatefulWidget {
   final bool isSeekingViaSwipe;
   final bool live;
 
-  const CustomVideoProgressBar({
-    super.key,
-    required this.controller,
+  const _MobileVideoProgressBar({
+    required this.player,
     this.onDragStart,
     this.onDragEnd,
     this.onDragUpdate,
@@ -1305,57 +1008,37 @@ class CustomVideoProgressBar extends StatefulWidget {
   });
 
   @override
-  State<CustomVideoProgressBar> createState() => _CustomVideoProgressBarState();
+  State<_MobileVideoProgressBar> createState() => _MobileVideoProgressBarState();
 }
 
-class _CustomVideoProgressBarState extends State<CustomVideoProgressBar> {
+class _MobileVideoProgressBarState extends State<_MobileVideoProgressBar> {
   bool _isDragging = false;
   double _dragValue = 0.0;
+  StreamSubscription<Duration>? _positionSubscription;
 
   @override
   void initState() {
     super.initState();
-    widget.controller.videoPlayerController?.addListener(_onVideoPlayerUpdate);
-    widget.controller.addEventsListener(_onBetterPlayerEvent);
-  }
-
-  void _onVideoPlayerUpdate() {
-    if (mounted && !_isDragging) {
-      setState(() {});
-    }
-  }
-
-  void _onBetterPlayerEvent(BetterPlayerEvent event) {
-    // 当视频初始化时，确保添加监听器
-    if (event.betterPlayerEventType == BetterPlayerEventType.initialized) {
-      widget.controller.videoPlayerController
-          ?.removeListener(_onVideoPlayerUpdate);
-      widget.controller.videoPlayerController
-          ?.addListener(_onVideoPlayerUpdate);
-    }
+    _positionSubscription = widget.player.stream.position.listen((_) {
+      if (mounted && !_isDragging) {
+        setState(() {});
+      }
+    });
   }
 
   @override
   void dispose() {
-    widget.controller.videoPlayerController
-        ?.removeListener(_onVideoPlayerUpdate);
-    widget.controller.removeEventsListener(_onBetterPlayerEvent);
+    _positionSubscription?.cancel();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final videoController = widget.controller.videoPlayerController;
-    if (videoController == null || videoController.value.hasError) {
-      return Container();
-    }
-
-    final duration = videoController.value.duration ?? Duration.zero;
-    final position = widget.dragPosition ?? videoController.value.position;
+    final duration = widget.player.state.duration;
+    final position = widget.dragPosition ?? widget.player.state.position;
 
     double value = 0.0;
     if (duration.inMilliseconds > 0) {
-      // live 模式下进度固定在最后
       if (widget.live) {
         value = 1.0;
       } else {
@@ -1369,37 +1052,44 @@ class _CustomVideoProgressBarState extends State<CustomVideoProgressBar> {
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onHorizontalDragStart: widget.live ? null : (details) {
-        _isDragging = true;
-        widget.onDragStart?.call();
-        _updateDragPosition(details.localPosition.dx, context);
-      },
-      onHorizontalDragUpdate: widget.live ? null : (details) {
-        if (_isDragging) {
-          widget.onDragUpdate?.call();
-          _updateDragPosition(details.localPosition.dx, context);
-        }
-      },
-      onHorizontalDragEnd: widget.live ? null : (details) {
-        if (_isDragging) {
-          final seekPosition = Duration(
-              milliseconds: (_dragValue * duration.inMilliseconds).round());
-          widget.controller.seekTo(seekPosition);
-
-          setState(() {
-            _isDragging = false;
-          });
-          widget.onDragEnd?.call();
-        }
-      },
-      onTapDown: widget.live ? null : (details) {
-        widget.onDragStart?.call();
-        _updateDragPosition(details.localPosition.dx, context);
-        final seekPosition = Duration(
-            milliseconds: (_dragValue * duration.inMilliseconds).round());
-        widget.controller.seekTo(seekPosition);
-        widget.onDragEnd?.call();
-      },
+      onHorizontalDragStart: widget.live
+          ? null
+          : (details) {
+              _isDragging = true;
+              widget.onDragStart?.call();
+              _updateDrag(details.localPosition.dx, context);
+            },
+      onHorizontalDragUpdate: widget.live
+          ? null
+          : (details) {
+              if (_isDragging) {
+                widget.onDragUpdate?.call();
+                _updateDrag(details.localPosition.dx, context);
+              }
+            },
+      onHorizontalDragEnd: widget.live
+          ? null
+          : (details) {
+              if (_isDragging) {
+                final seekPosition = Duration(
+                  milliseconds: (_dragValue * duration.inMilliseconds).round(),
+                );
+                widget.player.seek(seekPosition);
+                setState(() => _isDragging = false);
+                widget.onDragEnd?.call();
+              }
+            },
+      onTapDown: widget.live
+          ? null
+          : (details) {
+              widget.onDragStart?.call();
+              _updateDrag(details.localPosition.dx, context);
+              final seekPosition = Duration(
+                milliseconds: (_dragValue * duration.inMilliseconds).round(),
+              );
+              widget.player.seek(seekPosition);
+              widget.onDragEnd?.call();
+            },
       child: Container(
         height: 24,
         color: Colors.transparent,
@@ -1408,13 +1098,10 @@ class _CustomVideoProgressBarState extends State<CustomVideoProgressBar> {
             builder: (context, constraints) {
               final progressWidth = constraints.maxWidth;
               final progressValue = value.clamp(0.0, 1.0);
-              final thumbPosition = (progressValue * progressWidth)
-                  .clamp(8.0, progressWidth - 8.0);
-
+              final thumbPosition = (progressValue * progressWidth).clamp(8.0, progressWidth - 8.0);
               return Stack(
                 clipBehavior: Clip.none,
                 children: [
-                  // 进度条背景
                   Positioned(
                     left: 0,
                     right: 0,
@@ -1427,7 +1114,6 @@ class _CustomVideoProgressBarState extends State<CustomVideoProgressBar> {
                       ),
                     ),
                   ),
-                  // 已播放进度
                   Positioned(
                     left: 0,
                     top: 9,
@@ -1440,30 +1126,30 @@ class _CustomVideoProgressBarState extends State<CustomVideoProgressBar> {
                       ),
                     ),
                   ),
-                  // 可拖拽的圆形把手
-                  Positioned(
-                    left: thumbPosition - 8,
-                    top: 4,
-                    child: AnimatedScale(
-                      scale: widget.isSeekingViaSwipe ? 1.25 : 1.0,
-                      duration: const Duration(milliseconds: 150),
-                      child: Container(
-                        width: 16,
-                        height: 16,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: Colors.red,
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.3),
-                              blurRadius: 4,
-                              offset: const Offset(0, 2),
-                            ),
-                          ],
+                  if (!widget.live)
+                    Positioned(
+                      left: thumbPosition - 8,
+                      top: 4,
+                      child: AnimatedScale(
+                        scale: widget.isSeekingViaSwipe ? 1.25 : 1.0,
+                        duration: const Duration(milliseconds: 150),
+                        child: Container(
+                          width: 16,
+                          height: 16,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: Colors.red,
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.3),
+                                blurRadius: 4,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ),
-                  ),
                 ],
               );
             },
@@ -1473,22 +1159,15 @@ class _CustomVideoProgressBarState extends State<CustomVideoProgressBar> {
     );
   }
 
-  void _updateDragPosition(double dx, BuildContext context) {
+  void _updateDrag(double dx, BuildContext context) {
     final box = context.findRenderObject() as RenderBox?;
     if (box == null) return;
-
     final width = box.size.width;
     final value = (dx / width).clamp(0.0, 1.0);
-
-    setState(() {
-      _dragValue = value;
-    });
-
-    final videoController = widget.controller.videoPlayerController;
-    if (videoController != null && !videoController.value.hasError) {
-      final duration = videoController.value.duration ?? Duration.zero;
-      final position =
-          Duration(milliseconds: (value * duration.inMilliseconds).round());
+    setState(() => _dragValue = value);
+    if (!widget.live) {
+      final duration = widget.player.state.duration;
+      final position = Duration(milliseconds: (value * duration.inMilliseconds).round());
       widget.onPositionUpdate?.call(position);
     }
   }
