@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 import 'package:screen_brightness/screen_brightness.dart';
@@ -72,12 +73,16 @@ class _MobilePlayerControlsState extends State<MobilePlayerControls> {
   double _currentBrightness = 0.5;
   Timer? _volumeHideTimer;
   Timer? _brightnessHideTimer;
+  Timer? _timeUpdateTimer;
+  String _currentTime = '';
 
   @override
   void initState() {
     super.initState();
     _initSystemControls();
     _listenPlayerStreams();
+    _updateCurrentTime();
+    _startTimeUpdateTimer();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       _forceStartHideTimer();
@@ -135,6 +140,7 @@ class _MobilePlayerControlsState extends State<MobilePlayerControls> {
     _hideTimer?.cancel();
     _volumeHideTimer?.cancel();
     _brightnessHideTimer?.cancel();
+    _timeUpdateTimer?.cancel();
     VolumeController.instance.showSystemUI = true;
     super.dispose();
   }
@@ -321,6 +327,22 @@ class _MobilePlayerControlsState extends State<MobilePlayerControls> {
     });
   }
 
+  void _updateCurrentTime() {
+    final now = DateTime.now();
+    setState(() {
+      _currentTime = DateFormat('HH:mm').format(now);
+    });
+  }
+
+  void _startTimeUpdateTimer() {
+    _timeUpdateTimer?.cancel();
+    _timeUpdateTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) {
+        _updateCurrentTime();
+      }
+    });
+  }
+
   Future<void> _togglePlayPause() async {
     _onUserInteraction();
     if (_isPlaying) {
@@ -447,6 +469,7 @@ class _MobilePlayerControlsState extends State<MobilePlayerControls> {
         Positioned.fill(child: _buildGestureLayer()),
         _buildTopGradient(),
         _buildBottomGradient(),
+        if (_isFullscreen) _buildCurrentTime(),
         _buildBackButton(),
         _buildCastButton(),
         _buildCenterPlayPause(),
@@ -565,6 +588,30 @@ class _MobilePlayerControlsState extends State<MobilePlayerControls> {
                   Colors.black.withValues(alpha: 0.6),
                   Colors.transparent,
                 ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCurrentTime() {
+    return Positioned(
+      top: 8,
+      left: 0,
+      right: 0,
+      child: AnimatedOpacity(
+        opacity: (_controlsVisible && !_isLocked) ? 1.0 : 0.0,
+        duration: const Duration(milliseconds: 200),
+        child: IgnorePointer(
+          child: Center(
+            child: Text(
+              _currentTime,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
               ),
             ),
           ),
