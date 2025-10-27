@@ -755,7 +755,10 @@ class _MobilePlayerControlsState extends State<MobilePlayerControls> {
                 setState(() => _controlsVisible = true);
                 _hideTimer?.cancel();
               },
-              onDragEnd: _startHideTimer,
+              onDragEnd: () {
+                setState(() => _dragPosition = null);
+                _startHideTimer();
+              },
               onDragUpdate: () {
                 if (!_controlsVisible) {
                   setState(() => _controlsVisible = true);
