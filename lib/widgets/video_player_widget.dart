@@ -236,6 +236,23 @@ class _VideoPlayerWidgetState extends State<VideoPlayerWidget>
         setState(() {
           _hasCompleted = false;
         });
+        _pip.setup(const PipOptions(
+          autoEnterEnabled: false,
+          aspectRatioX: 16,
+          aspectRatioY: 9,
+          preferredContentWidth: 480,
+          preferredContentHeight: 270,
+          controlStyle: 2,
+        ));
+      } else {
+        _pip.setup(const PipOptions(
+          autoEnterEnabled: true,
+          aspectRatioX: 16,
+          aspectRatioY: 9,
+          preferredContentWidth: 480,
+          preferredContentHeight: 270,
+          controlStyle: 2,
+        ));
       }
     });
 
