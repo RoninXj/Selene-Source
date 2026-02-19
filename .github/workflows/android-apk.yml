@@ -76,12 +76,54 @@ jobs:
           cp build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk build/app/outputs/flutter-apk/SeleneTv-release-armeabi-v7a.apk
           cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk build/app/outputs/flutter-apk/SeleneTv-release-arm64-v8a.apk
 
+      - name: Re-sign APKs for Android 6 compatibility (v1 + v2)
+        run: |
+          APKSIGNER="$ANDROID_HOME/build-tools/34.0.0/apksigner"
+          ZIPALIGN="$ANDROID_HOME/build-tools/34.0.0/zipalign"
+          DEBUG_KEYSTORE="$HOME/.android/debug.keystore"
+
+          if [ ! -f "$DEBUG_KEYSTORE" ]; then
+            echo "Debug keystore not found, generating one..."
+            mkdir -p "$HOME/.android"
+            keytool -genkeypair \
+              -v \
+              -keystore "$DEBUG_KEYSTORE" \
+              -storepass android \
+              -keypass android \
+              -keyalg RSA \
+              -keysize 2048 \
+              -validity 10000 \
+              -alias androiddebugkey \
+              -dname "CN=Android Debug,O=Android,C=US"
+          fi
+
+          for apk in build/app/outputs/flutter-apk/SeleneTv-release-*.apk; do
+            echo "Re-signing $apk with v1+v2..."
+            aligned="${apk%.apk}-aligned.apk"
+            signed="${apk%.apk}-signed.apk"
+            "$ZIPALIGN" -f -p 4 "$apk" "$aligned"
+            "$APKSIGNER" sign \
+              --ks "$DEBUG_KEYSTORE" \
+              --ks-key-alias androiddebugkey \
+              --ks-pass pass:android \
+              --key-pass pass:android \
+              --v1-signing-enabled true \
+              --v2-signing-enabled true \
+              --out "$signed" \
+              "$aligned"
+            mv "$signed" "$apk"
+            rm -f "$aligned"
+          done
+
       - name: Verify APK signatures and integrity
         run: |
           APKSIGNER="$ANDROID_HOME/build-tools/34.0.0/apksigner"
           for apk in build/app/outputs/flutter-apk/SeleneTv-*.apk; do
             echo "Verifying $apk"
-            "$APKSIGNER" verify --verbose "$apk"
+            verify_output="$("$APKSIGNER" verify --verbose --print-certs "$apk")"
+            echo "$verify_output"
+            echo "$verify_output" | grep -q "Verified using v1 scheme (JAR signing): true"
+            echo "$verify_output" | grep -q "Verified using v2 scheme (APK Signature Scheme v2): true"
             unzip -t "$apk" > /dev/null
           done
 

@@ -27,7 +27,8 @@ android {
         applicationId = "org.moontechlab.selene"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = flutter.minSdkVersion
+        // Force legacy-compatible minSdk for older Android TV devices (e.g. Android 6).
+        minSdk = 21
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
@@ -58,7 +59,7 @@ android {
                 // Fallback to debug signing for local development
                 signingConfig = signingConfigs.getByName("debug")
             }
-            
+
             // Enable R8 code shrinking, obfuscation, and optimization
             isMinifyEnabled = true
             isShrinkResources = true
