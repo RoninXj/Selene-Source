@@ -19,17 +19,27 @@ class LoginScreen extends StatefulWidget {
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
+enum _TvInputField { url, username, password, subscription }
+
+class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
   final _formKey = GlobalKey<FormState>();
   final _urlController = TextEditingController();
   final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
   final _subscriptionUrlController = TextEditingController();
+  final _urlFocusNode = FocusNode();
+  final _usernameFocusNode = FocusNode();
+  final _passwordFocusNode = FocusNode();
+  final _subscriptionFocusNode = FocusNode();
+  final _loginButtonFocusNode = FocusNode();
+  final _localLoginButtonFocusNode = FocusNode();
   bool _isPasswordVisible = false;
   bool _isLoading = false;
   bool _isFormValid = false;
   bool _isLocalMode = false;
   bool _isAndroidTv = false;
+  _TvInputField? _activeTvInputField;
+  bool _wasTvKeyboardVisible = false;
 
   // 点击计数器相关
   int _logoTapCount = 0;
@@ -38,6 +48,8 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    HardwareKeyboard.instance.addHandler(_handleTvHardwareKeyEvent);
     _urlController.addListener(_validateForm);
     _usernameController.addListener(_validateForm);
     _passwordController.addListener(_validateForm);
@@ -52,6 +64,12 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() {
       _isAndroidTv = isTv;
     });
+    if (isTv) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _focusInitialTvNode(showKeyboard: false);
+      });
+    }
   }
 
   void _loadSavedUserData() async {
@@ -89,12 +107,42 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    HardwareKeyboard.instance.removeHandler(_handleTvHardwareKeyEvent);
     _urlController.dispose();
     _usernameController.dispose();
     _passwordController.dispose();
     _subscriptionUrlController.dispose();
+    _urlFocusNode.dispose();
+    _usernameFocusNode.dispose();
+    _passwordFocusNode.dispose();
+    _subscriptionFocusNode.dispose();
+    _loginButtonFocusNode.dispose();
+    _localLoginButtonFocusNode.dispose();
     _tapTimer?.cancel();
     super.dispose();
+  }
+
+  bool _isSoftKeyboardVisible() {
+    return WidgetsBinding.instance.platformDispatcher.views
+        .any((view) => view.viewInsets.bottom > 0);
+  }
+
+  @override
+  void didChangeMetrics() {
+    super.didChangeMetrics();
+    if (!_isAndroidTv) return;
+
+    final keyboardVisible = _isSoftKeyboardVisible();
+    if (_wasTvKeyboardVisible &&
+        !keyboardVisible &&
+        _activeTvInputField != null &&
+        mounted) {
+      setState(() {
+        _activeTvInputField = null;
+      });
+    }
+    _wasTvKeyboardVisible = keyboardVisible;
   }
 
   void _handleLogoTap() {
@@ -147,10 +195,221 @@ class _LoginScreenState extends State<LoginScreen> {
 
   void _switchLoginMode(bool localMode) {
     if (_isLocalMode == localMode) return;
+    _endTvEditing();
     setState(() {
       _isLocalMode = localMode;
     });
     _validateForm();
+    if (_isAndroidTv) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _focusInitialTvNode(showKeyboard: false);
+      });
+    }
+  }
+
+  bool _isTvActivateKey(LogicalKeyboardKey key) {
+    return key == LogicalKeyboardKey.enter ||
+        key == LogicalKeyboardKey.select ||
+        key == LogicalKeyboardKey.space;
+  }
+
+  bool _isTvDirectionalKey(LogicalKeyboardKey key) {
+    return key == LogicalKeyboardKey.arrowUp ||
+        key == LogicalKeyboardKey.arrowDown ||
+        key == LogicalKeyboardKey.arrowLeft ||
+        key == LogicalKeyboardKey.arrowRight;
+  }
+
+  bool _isTvBackKey(LogicalKeyboardKey key) {
+    return key == LogicalKeyboardKey.goBack ||
+        key == LogicalKeyboardKey.escape ||
+        key == LogicalKeyboardKey.browserBack;
+  }
+
+  bool _isEditingTvField(_TvInputField field) {
+    return _isAndroidTv && _activeTvInputField == field;
+  }
+
+  void _showSoftKeyboard() {
+    if (!_isAndroidTv) return;
+    _wasTvKeyboardVisible = true;
+    SystemChannels.textInput.invokeMethod<void>('TextInput.show');
+  }
+
+  void _beginTvEditing(_TvInputField field, FocusNode focusNode) {
+    if (!_isAndroidTv) return;
+    if (_activeTvInputField != field) {
+      setState(() {
+        _activeTvInputField = field;
+      });
+    }
+    focusNode.requestFocus();
+    _showSoftKeyboard();
+  }
+
+  void _endTvEditing() {
+    if (!_isAndroidTv) return;
+    if (_activeTvInputField != null) {
+      setState(() {
+        _activeTvInputField = null;
+      });
+    }
+    _wasTvKeyboardVisible = false;
+    SystemChannels.textInput.invokeMethod<void>('TextInput.hide');
+  }
+
+  void _focusInitialTvNode({required bool showKeyboard}) {
+    if (!_isAndroidTv) return;
+    if (_isLocalMode) {
+      if (showKeyboard) {
+        _beginTvEditing(_TvInputField.subscription, _subscriptionFocusNode);
+      } else {
+        _endTvEditing();
+        _subscriptionFocusNode.requestFocus();
+      }
+    } else {
+      if (showKeyboard) {
+        _beginTvEditing(_TvInputField.url, _urlFocusNode);
+      } else {
+        _endTvEditing();
+        _urlFocusNode.requestFocus();
+      }
+    }
+  }
+
+  bool _isKnownTvFocus(FocusNode? node) {
+    return node == _urlFocusNode ||
+        node == _usernameFocusNode ||
+        node == _passwordFocusNode ||
+        node == _subscriptionFocusNode ||
+        node == _loginButtonFocusNode ||
+        node == _localLoginButtonFocusNode;
+  }
+
+  bool _handleTvHardwareKeyEvent(KeyEvent event) {
+    if (!_isAndroidTv || event is! KeyDownEvent) {
+      return false;
+    }
+
+    final key = event.logicalKey;
+    final currentFocus = FocusManager.instance.primaryFocus;
+
+    if (currentFocus == _urlFocusNode) {
+      if (_isTvBackKey(key) && _isEditingTvField(_TvInputField.url)) {
+        _endTvEditing();
+        _urlFocusNode.requestFocus();
+        return true;
+      }
+      if (key == LogicalKeyboardKey.arrowDown) {
+        _endTvEditing();
+        _usernameFocusNode.requestFocus();
+        return true;
+      }
+      if (_isTvActivateKey(key)) {
+        _beginTvEditing(_TvInputField.url, _urlFocusNode);
+        return true;
+      }
+      return false;
+    }
+
+    if (currentFocus == _usernameFocusNode) {
+      if (_isTvBackKey(key) && _isEditingTvField(_TvInputField.username)) {
+        _endTvEditing();
+        _usernameFocusNode.requestFocus();
+        return true;
+      }
+      if (key == LogicalKeyboardKey.arrowDown) {
+        _endTvEditing();
+        _passwordFocusNode.requestFocus();
+        return true;
+      }
+      if (key == LogicalKeyboardKey.arrowUp) {
+        _endTvEditing();
+        _urlFocusNode.requestFocus();
+        return true;
+      }
+      if (_isTvActivateKey(key)) {
+        _beginTvEditing(_TvInputField.username, _usernameFocusNode);
+        return true;
+      }
+      return false;
+    }
+
+    if (currentFocus == _passwordFocusNode) {
+      if (_isTvBackKey(key) && _isEditingTvField(_TvInputField.password)) {
+        _endTvEditing();
+        _passwordFocusNode.requestFocus();
+        return true;
+      }
+      if (key == LogicalKeyboardKey.arrowDown) {
+        _endTvEditing();
+        _loginButtonFocusNode.requestFocus();
+        return true;
+      }
+      if (key == LogicalKeyboardKey.arrowUp) {
+        _endTvEditing();
+        _usernameFocusNode.requestFocus();
+        return true;
+      }
+      if (_isTvActivateKey(key)) {
+        _beginTvEditing(_TvInputField.password, _passwordFocusNode);
+        return true;
+      }
+      return false;
+    }
+
+    if (currentFocus == _subscriptionFocusNode) {
+      if (_isTvBackKey(key) && _isEditingTvField(_TvInputField.subscription)) {
+        _endTvEditing();
+        _subscriptionFocusNode.requestFocus();
+        return true;
+      }
+      if (key == LogicalKeyboardKey.arrowDown) {
+        _endTvEditing();
+        _localLoginButtonFocusNode.requestFocus();
+        return true;
+      }
+      if (_isTvActivateKey(key)) {
+        _beginTvEditing(_TvInputField.subscription, _subscriptionFocusNode);
+        return true;
+      }
+      return false;
+    }
+
+    if (currentFocus == _loginButtonFocusNode) {
+      if (key == LogicalKeyboardKey.arrowUp) {
+        _passwordFocusNode.requestFocus();
+        return true;
+      }
+      if (_isTvActivateKey(key) && !_isLoading && _isFormValid) {
+        _endTvEditing();
+        _handleLogin();
+        return true;
+      }
+      return false;
+    }
+
+    if (currentFocus == _localLoginButtonFocusNode) {
+      if (key == LogicalKeyboardKey.arrowUp) {
+        _subscriptionFocusNode.requestFocus();
+        return true;
+      }
+      if (_isTvActivateKey(key) && !_isLoading && _isFormValid) {
+        _endTvEditing();
+        _handleLocalModeLogin();
+        return true;
+      }
+      return false;
+    }
+
+    if (!_isKnownTvFocus(currentFocus) &&
+        (_isTvDirectionalKey(key) || _isTvActivateKey(key))) {
+      _focusInitialTvNode(showKeyboard: _isTvActivateKey(key));
+      return true;
+    }
+
+    return false;
   }
 
   Widget _buildTvModeSwitch() {
@@ -196,6 +455,9 @@ class _LoginScreenState extends State<LoginScreen> {
         // 订阅链接输入框
         TextFormField(
           controller: _subscriptionUrlController,
+          focusNode: _subscriptionFocusNode,
+          readOnly:
+              _isAndroidTv && !_isEditingTvField(_TvInputField.subscription),
           style: FontUtils.poppins(
             fontSize: 16,
             color: const Color(0xFF2c3e50),
@@ -242,12 +504,26 @@ class _LoginScreenState extends State<LoginScreen> {
             return null;
           },
           onChanged: (value) => _validateForm(),
-          onFieldSubmitted: (_) => _handleSubmit(),
+          onTap: () {
+            if (_isAndroidTv) {
+              _beginTvEditing(
+                  _TvInputField.subscription, _subscriptionFocusNode);
+            }
+          },
+          onFieldSubmitted: (_) {
+            if (_isAndroidTv) {
+              _endTvEditing();
+              _localLoginButtonFocusNode.requestFocus();
+              return;
+            }
+            _handleSubmit();
+          },
         ),
         const SizedBox(height: 32),
 
         // 登录按钮
         ElevatedButton(
+          focusNode: _localLoginButtonFocusNode,
           onPressed:
               (_isLoading || !_isFormValid) ? null : _handleLocalModeLogin,
           style: ElevatedButton.styleFrom(
@@ -444,9 +720,10 @@ class _LoginScreenState extends State<LoginScreen> {
         final content =
             await SubscriptionService.parseSubscriptionContent(response.body);
 
-        if (content == null || 
-            (content.searchResources == null || content.searchResources!.isEmpty) &&
-            (content.liveSources == null || content.liveSources!.isEmpty)) {
+        if (content == null ||
+            (content.searchResources == null ||
+                    content.searchResources!.isEmpty) &&
+                (content.liveSources == null || content.liveSources!.isEmpty)) {
           setState(() {
             _isLoading = false;
           });
@@ -525,8 +802,10 @@ class _LoginScreenState extends State<LoginScreen> {
 
         // 保存订阅链接和内容
         await LocalModeStorageService.saveSubscriptionUrl(newUrl);
-        if (content.searchResources != null && content.searchResources!.isNotEmpty) {
-          await LocalModeStorageService.saveSearchSources(content.searchResources!);
+        if (content.searchResources != null &&
+            content.searchResources!.isNotEmpty) {
+          await LocalModeStorageService.saveSearchSources(
+              content.searchResources!);
         }
         if (content.liveSources != null && content.liveSources!.isNotEmpty) {
           await LocalModeStorageService.saveLiveSources(content.liveSources!);
@@ -636,6 +915,9 @@ class _LoginScreenState extends State<LoginScreen> {
                     // URL 输入框
                     TextFormField(
                       controller: _urlController,
+                      focusNode: _urlFocusNode,
+                      readOnly:
+                          _isAndroidTv && !_isEditingTvField(_TvInputField.url),
                       style: FontUtils.poppins(
                         fontSize: 16,
                         color: const Color(0xFF2c3e50),
@@ -687,13 +969,28 @@ class _LoginScreenState extends State<LoginScreen> {
                         }
                         return null;
                       },
-                      onFieldSubmitted: (_) => _handleSubmit(),
+                      onTap: () {
+                        if (_isAndroidTv) {
+                          _beginTvEditing(_TvInputField.url, _urlFocusNode);
+                        }
+                      },
+                      onFieldSubmitted: (_) {
+                        if (_isAndroidTv) {
+                          _endTvEditing();
+                          _usernameFocusNode.requestFocus();
+                          return;
+                        }
+                        _handleSubmit();
+                      },
                     ),
                     const SizedBox(height: 20),
 
                     // 用户名输入框
                     TextFormField(
                       controller: _usernameController,
+                      focusNode: _usernameFocusNode,
+                      readOnly: _isAndroidTv &&
+                          !_isEditingTvField(_TvInputField.username),
                       style: FontUtils.poppins(
                         fontSize: 16,
                         color: const Color(0xFF2c3e50),
@@ -739,13 +1036,29 @@ class _LoginScreenState extends State<LoginScreen> {
                         }
                         return null;
                       },
-                      onFieldSubmitted: (_) => _handleSubmit(),
+                      onTap: () {
+                        if (_isAndroidTv) {
+                          _beginTvEditing(
+                              _TvInputField.username, _usernameFocusNode);
+                        }
+                      },
+                      onFieldSubmitted: (_) {
+                        if (_isAndroidTv) {
+                          _endTvEditing();
+                          _passwordFocusNode.requestFocus();
+                          return;
+                        }
+                        _handleSubmit();
+                      },
                     ),
                     const SizedBox(height: 20),
 
                     // 密码输入框
                     TextFormField(
                       controller: _passwordController,
+                      focusNode: _passwordFocusNode,
+                      readOnly: _isAndroidTv &&
+                          !_isEditingTvField(_TvInputField.password),
                       obscureText: !_isPasswordVisible,
                       style: FontUtils.poppins(
                         fontSize: 16,
@@ -806,12 +1119,26 @@ class _LoginScreenState extends State<LoginScreen> {
                         }
                         return null;
                       },
-                      onFieldSubmitted: (_) => _handleSubmit(),
+                      onTap: () {
+                        if (_isAndroidTv) {
+                          _beginTvEditing(
+                              _TvInputField.password, _passwordFocusNode);
+                        }
+                      },
+                      onFieldSubmitted: (_) {
+                        if (_isAndroidTv) {
+                          _endTvEditing();
+                          _loginButtonFocusNode.requestFocus();
+                          return;
+                        }
+                        _handleSubmit();
+                      },
                     ),
                     const SizedBox(height: 32),
 
                     // 登录按钮
                     ElevatedButton(
+                      focusNode: _loginButtonFocusNode,
                       onPressed:
                           (_isLoading || !_isFormValid) ? null : _handleLogin,
                       style: ElevatedButton.styleFrom(
@@ -905,6 +1232,9 @@ class _LoginScreenState extends State<LoginScreen> {
                       // URL 输入框
                       TextFormField(
                         controller: _urlController,
+                        focusNode: _urlFocusNode,
+                        readOnly: _isAndroidTv &&
+                            !_isEditingTvField(_TvInputField.url),
                         style: FontUtils.poppins(
                           fontSize: 16,
                           color: const Color(0xFF2c3e50),
@@ -956,13 +1286,28 @@ class _LoginScreenState extends State<LoginScreen> {
                           }
                           return null;
                         },
-                        onFieldSubmitted: (_) => _handleSubmit(),
+                        onTap: () {
+                          if (_isAndroidTv) {
+                            _beginTvEditing(_TvInputField.url, _urlFocusNode);
+                          }
+                        },
+                        onFieldSubmitted: (_) {
+                          if (_isAndroidTv) {
+                            _endTvEditing();
+                            _usernameFocusNode.requestFocus();
+                            return;
+                          }
+                          _handleSubmit();
+                        },
                       ),
                       const SizedBox(height: 20),
 
                       // 用户名输入框
                       TextFormField(
                         controller: _usernameController,
+                        focusNode: _usernameFocusNode,
+                        readOnly: _isAndroidTv &&
+                            !_isEditingTvField(_TvInputField.username),
                         style: FontUtils.poppins(
                           fontSize: 16,
                           color: const Color(0xFF2c3e50),
@@ -1008,13 +1353,29 @@ class _LoginScreenState extends State<LoginScreen> {
                           }
                           return null;
                         },
-                        onFieldSubmitted: (_) => _handleSubmit(),
+                        onTap: () {
+                          if (_isAndroidTv) {
+                            _beginTvEditing(
+                                _TvInputField.username, _usernameFocusNode);
+                          }
+                        },
+                        onFieldSubmitted: (_) {
+                          if (_isAndroidTv) {
+                            _endTvEditing();
+                            _passwordFocusNode.requestFocus();
+                            return;
+                          }
+                          _handleSubmit();
+                        },
                       ),
                       const SizedBox(height: 20),
 
                       // 密码输入框
                       TextFormField(
                         controller: _passwordController,
+                        focusNode: _passwordFocusNode,
+                        readOnly: _isAndroidTv &&
+                            !_isEditingTvField(_TvInputField.password),
                         obscureText: !_isPasswordVisible,
                         style: FontUtils.poppins(
                           fontSize: 16,
@@ -1075,12 +1436,26 @@ class _LoginScreenState extends State<LoginScreen> {
                           }
                           return null;
                         },
-                        onFieldSubmitted: (_) => _handleSubmit(),
+                        onTap: () {
+                          if (_isAndroidTv) {
+                            _beginTvEditing(
+                                _TvInputField.password, _passwordFocusNode);
+                          }
+                        },
+                        onFieldSubmitted: (_) {
+                          if (_isAndroidTv) {
+                            _endTvEditing();
+                            _loginButtonFocusNode.requestFocus();
+                            return;
+                          }
+                          _handleSubmit();
+                        },
                       ),
                       const SizedBox(height: 32),
 
                       // 登录按钮
                       ElevatedButton(
+                        focusNode: _loginButtonFocusNode,
                         onPressed:
                             (_isLoading || !_isFormValid) ? null : _handleLogin,
                         style: ElevatedButton.styleFrom(
@@ -1182,7 +1557,9 @@ class _TvModeButtonState extends State<_TvModeButton> {
         duration: const Duration(milliseconds: 120),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
         decoration: BoxDecoration(
-          color: widget.active ? const Color(0xFF2c3e50) : Colors.white.withValues(alpha: 0.7),
+          color: widget.active
+              ? const Color(0xFF2c3e50)
+              : Colors.white.withValues(alpha: 0.7),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
             color: _focused ? const Color(0xFF27AE60) : Colors.transparent,

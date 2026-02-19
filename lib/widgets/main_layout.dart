@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
 import 'package:selene/services/search_service.dart';
@@ -52,9 +53,12 @@ class MainLayout extends StatefulWidget {
   State<MainLayout> createState() => _MainLayoutState();
 }
 
-class _MainLayoutState extends State<MainLayout> {
+class _MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
   bool _isSearchButtonPressed = false;
   bool _showUserMenu = false;
+  bool _isAndroidTv = DeviceUtils.isAndroidTVSync();
+  bool _isSearchEditing = false;
+  bool _wasKeyboardVisible = false;
 
   // 用于跟踪底部导航栏按钮的 hover 状态
   int? _hoveredNavIndex;
@@ -84,10 +88,151 @@ class _MainLayoutState extends State<MainLayout> {
   OverlayEntry? _overlayEntry;
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    HardwareKeyboard.instance.addHandler(_handleTvSearchInputKeyEvent);
+    _resolveDeviceType();
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    HardwareKeyboard.instance.removeHandler(_handleTvSearchInputKeyEvent);
     _debounceTimer?.cancel();
     _removeOverlay();
     super.dispose();
+  }
+
+  Future<void> _resolveDeviceType() async {
+    final isTv = await DeviceUtils.isAndroidTV();
+    if (!mounted) return;
+    setState(() {
+      _isAndroidTv = isTv;
+    });
+  }
+
+  bool _isSoftKeyboardVisible() {
+    return WidgetsBinding.instance.platformDispatcher.views
+        .any((view) => view.viewInsets.bottom > 0);
+  }
+
+  @override
+  void didChangeMetrics() {
+    super.didChangeMetrics();
+    if (!_isAndroidTv) return;
+    final keyboardVisible = _isSoftKeyboardVisible();
+    if (_wasKeyboardVisible &&
+        !keyboardVisible &&
+        _isSearchEditing &&
+        mounted) {
+      setState(() {
+        _isSearchEditing = false;
+      });
+    }
+    _wasKeyboardVisible = keyboardVisible;
+  }
+
+  bool _isActivateKey(LogicalKeyboardKey key) {
+    return key == LogicalKeyboardKey.enter ||
+        key == LogicalKeyboardKey.select ||
+        key == LogicalKeyboardKey.space;
+  }
+
+  bool _isBackKey(LogicalKeyboardKey key) {
+    return key == LogicalKeyboardKey.goBack ||
+        key == LogicalKeyboardKey.escape ||
+        key == LogicalKeyboardKey.browserBack;
+  }
+
+  bool _isDirectionKey(LogicalKeyboardKey key) {
+    return key == LogicalKeyboardKey.arrowUp ||
+        key == LogicalKeyboardKey.arrowDown ||
+        key == LogicalKeyboardKey.arrowLeft ||
+        key == LogicalKeyboardKey.arrowRight;
+  }
+
+  bool _shouldUseTvSearchInputMode() {
+    return _isAndroidTv &&
+        widget.isSearchMode &&
+        widget.searchFocusNode != null;
+  }
+
+  void _beginTvSearchEditing() {
+    if (!_shouldUseTvSearchInputMode()) return;
+    if (!_isSearchEditing) {
+      setState(() {
+        _isSearchEditing = true;
+      });
+    }
+    widget.searchFocusNode!.requestFocus();
+    _wasKeyboardVisible = true;
+    SystemChannels.textInput.invokeMethod<void>('TextInput.show');
+  }
+
+  void _endTvSearchEditing({
+    bool keepFocus = false,
+    bool hideKeyboard = true,
+  }) {
+    if (!_shouldUseTvSearchInputMode()) return;
+    if (_isSearchEditing) {
+      setState(() {
+        _isSearchEditing = false;
+      });
+    }
+    if (hideKeyboard) {
+      _wasKeyboardVisible = false;
+      SystemChannels.textInput.invokeMethod<void>('TextInput.hide');
+    }
+    if (keepFocus) {
+      widget.searchFocusNode!.requestFocus();
+    }
+  }
+
+  bool _handleTvSearchInputKeyEvent(KeyEvent event) {
+    if (!_shouldUseTvSearchInputMode() || event is! KeyDownEvent) {
+      return false;
+    }
+
+    final key = event.logicalKey;
+    final focus = FocusManager.instance.primaryFocus;
+    final searchFocus = widget.searchFocusNode!;
+
+    if (focus == searchFocus) {
+      if (_isSearchEditing) {
+        if (_isBackKey(key)) {
+          _endTvSearchEditing(keepFocus: true);
+          return true;
+        }
+        return false;
+      }
+
+      if (_isActivateKey(key)) {
+        _beginTvSearchEditing();
+        return true;
+      }
+      if (key == LogicalKeyboardKey.arrowRight ||
+          key == LogicalKeyboardKey.arrowDown) {
+        FocusScope.of(context).nextFocus();
+        return true;
+      }
+      if (key == LogicalKeyboardKey.arrowLeft ||
+          key == LogicalKeyboardKey.arrowUp) {
+        FocusScope.of(context).previousFocus();
+        return true;
+      }
+      return false;
+    }
+
+    if (focus == null && (_isActivateKey(key) || _isDirectionKey(key))) {
+      searchFocus.requestFocus();
+      if (_isActivateKey(key)) {
+        _beginTvSearchEditing();
+      }
+      return true;
+    }
+
+    return false;
   }
 
   void _removeOverlay() {
@@ -502,12 +647,16 @@ class _MainLayoutState extends State<MainLayout> {
             if (!hasFocus) {
               // 失焦时关闭建议框
               _removeOverlay();
+              if (_shouldUseTvSearchInputMode()) {
+                _endTvSearchEditing(hideKeyboard: false);
+              }
             }
           },
           child: TextField(
             controller: widget.searchController,
             focusNode: widget.searchFocusNode,
             autofocus: false,
+            readOnly: _shouldUseTvSearchInputMode() && !_isSearchEditing,
             textInputAction: TextInputAction.search,
             keyboardType: TextInputType.text,
             textAlignVertical: TextAlignVertical.center,
@@ -659,11 +808,17 @@ class _MainLayoutState extends State<MainLayout> {
               height: 1.2,
             ),
             onSubmitted: (value) {
+              if (_shouldUseTvSearchInputMode()) {
+                _endTvSearchEditing();
+              }
               _removeOverlay();
               widget.onSearchSubmitted?.call(value);
             },
             onChanged: _onSearchQueryChanged,
             onTap: () {
+              if (_shouldUseTvSearchInputMode()) {
+                _beginTvSearchEditing();
+              }
               // 聚焦时如果有内容，显示建议
               if (widget.searchQuery?.trim().isNotEmpty ?? false) {
                 _fetchSearchSuggestions(widget.searchQuery!);
