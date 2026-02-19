@@ -37,7 +37,9 @@ jobs:
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          channel: stable
+          # Flutter 3.35+ raises Android minSdk baseline to 24.
+          # Pin to a compatible version for Android 6 (API 23) TVs.
+          flutter-version: "3.32.5"
           cache: true
 
       - name: Cache Dart/Flutter pub dependencies
@@ -60,6 +62,21 @@ jobs:
       - name: Prepare SeleneTv APK file
         run: |
           cp build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/SeleneTv-release.apk
+
+      - name: Verify APK minSdk compatibility for Android 6 TV
+        run: |
+          AAPT="$ANDROID_HOME/build-tools/34.0.0/aapt"
+          APK="build/app/outputs/flutter-apk/SeleneTv-release.apk"
+          "$AAPT" dump badging "$APK" | grep -E "package: name|sdkVersion|targetSdkVersion"
+          MIN_SDK=$("$AAPT" dump badging "$APK" | sed -n "s/.*sdkVersion:'\\([0-9]*\\)'.*/\\1/p")
+          if [ -z "$MIN_SDK" ]; then
+            echo "::error::Unable to parse minSdk from APK"
+            exit 1
+          fi
+          if [ "$MIN_SDK" -gt 23 ]; then
+            echo "::error::APK minSdk=$MIN_SDK is not installable on Android 6 (API 23)"
+            exit 1
+          fi
 
       - name: Upload SeleneTv APK
         uses: actions/upload-artifact@v4
