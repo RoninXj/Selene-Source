@@ -55,7 +55,7 @@ jobs:
         run: flutter pub get
 
       - name: Build release APK (Orion-style direct build)
-        run: flutter build apk --release --target-platform android-arm
+        run: flutter build apk --release
 
       - name: Prepare SeleneTv APK file
         run: |

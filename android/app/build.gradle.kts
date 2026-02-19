@@ -32,12 +32,24 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+
+        // Keep both 32/64-bit ABIs for broader Android TV compatibility.
+        ndk {
+            abiFilters += listOf("armeabi-v7a", "arm64-v8a")
+        }
     }
 
     val keystorePropertiesFile = rootProject.file("key.properties")
     val hasSigningConfig = keystorePropertiesFile.exists()
 
     signingConfigs {
+        getByName("debug") {
+            enableV1Signing = true
+            enableV2Signing = true
+            enableV3Signing = false
+            enableV4Signing = false
+        }
+
         if (hasSigningConfig) {
             create("release") {
                 val properties = Properties()
@@ -47,7 +59,20 @@ android {
                 storePassword = properties.getProperty("storePassword")
                 keyAlias = properties.getProperty("keyAlias")
                 keyPassword = properties.getProperty("keyPassword")
+
+                // Prefer broad compatibility signatures for old Android TV firmware.
+                enableV1Signing = true
+                enableV2Signing = true
+                enableV3Signing = false
+                enableV4Signing = false
             }
+        }
+    }
+
+    packaging {
+        jniLibs {
+            // Legacy native library packaging is safer for some Android 6 TV ROMs.
+            useLegacyPackaging = true
         }
     }
 
