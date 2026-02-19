@@ -35,6 +35,12 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-gradle-
 
+      - name: Cache CI release signing keystore
+        uses: actions/cache@v4
+        with:
+          path: ~/.android/selenetv-release.keystore
+          key: ${{ runner.os }}-selenetv-release-signing-key-v2
+
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
@@ -75,6 +81,49 @@ jobs:
           cp build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/SeleneTv-release-universal.apk
           cp build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk build/app/outputs/flutter-apk/SeleneTv-release-armeabi-v7a.apk
           cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk build/app/outputs/flutter-apk/SeleneTv-release-arm64-v8a.apk
+
+      - name: Re-sign APKs for Android 6 TV compatibility (release key, v1 + v2)
+        run: |
+          APKSIGNER="$ANDROID_HOME/build-tools/34.0.0/apksigner"
+          ZIPALIGN="$ANDROID_HOME/build-tools/34.0.0/zipalign"
+          RELEASE_KEYSTORE="$HOME/.android/selenetv-release.keystore"
+          RELEASE_ALIAS="selenetv"
+          RELEASE_PASS="selenetv123"
+
+          if [ ! -f "$RELEASE_KEYSTORE" ]; then
+            echo "Release keystore not found, generating one..."
+            mkdir -p "$HOME/.android"
+            keytool -genkeypair \
+              -v \
+              -keystore "$RELEASE_KEYSTORE" \
+              -storepass "$RELEASE_PASS" \
+              -keypass "$RELEASE_PASS" \
+              -keyalg RSA \
+              -keysize 2048 \
+              -validity 10000 \
+              -alias "$RELEASE_ALIAS" \
+              -dname "CN=SeleneTv,O=SeleneTv,C=US"
+          fi
+
+          for apk in build/app/outputs/flutter-apk/SeleneTv-release-*.apk; do
+            echo "Re-signing $apk with release key (v1+v2, no v3/v4)..."
+            aligned="${apk%.apk}-aligned.apk"
+            signed="${apk%.apk}-signed.apk"
+            "$ZIPALIGN" -f -p 4 "$apk" "$aligned"
+            "$APKSIGNER" sign \
+              --ks "$RELEASE_KEYSTORE" \
+              --ks-key-alias "$RELEASE_ALIAS" \
+              --ks-pass pass:"$RELEASE_PASS" \
+              --key-pass pass:"$RELEASE_PASS" \
+              --v1-signing-enabled true \
+              --v2-signing-enabled true \
+              --v3-signing-enabled false \
+              --v4-signing-enabled false \
+              --out "$signed" \
+              "$aligned"
+            mv "$signed" "$apk"
+            rm -f "$aligned"
+          done
 
       - name: Verify APK signatures and integrity
         run: |
