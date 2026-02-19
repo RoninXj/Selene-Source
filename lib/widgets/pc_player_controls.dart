@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 import 'dlna_device_dialog.dart';
+import '../utils/device_utils.dart';
 
 // 带 hover 效果的按钮组件
 class HoverButton extends StatefulWidget {
@@ -452,17 +453,51 @@ class _PCPlayerControlsState extends State<PCPlayerControls> {
 
   // 处理键盘事件
   KeyEventResult _handleKeyEvent(FocusNode node, KeyEvent event) {
+    final isAndroidTv = DeviceUtils.isAndroidTVSync();
+
     // 只处理按键按下事件
     if (event is KeyDownEvent) {
+      final key = event.logicalKey;
+
+      // TV 遥控模式：
+      // 1) 子控件已有焦点时，交给系统做方向焦点遍历
+      // 2) 根焦点时，仅将上下键用于进入焦点遍历；左右仍保留快退/快进
+      if (isAndroidTv &&
+          (key == LogicalKeyboardKey.arrowUp ||
+              key == LogicalKeyboardKey.arrowDown ||
+              key == LogicalKeyboardKey.arrowLeft ||
+              key == LogicalKeyboardKey.arrowRight)) {
+        final scope = FocusScope.of(context);
+        final hasFocusedChild =
+            FocusManager.instance.primaryFocus != null &&
+                FocusManager.instance.primaryFocus != _focusNode;
+
+        if (hasFocusedChild) {
+          // 已有子焦点时，让系统按方向处理遍历
+          return KeyEventResult.ignored;
+        }
+
+        if (key == LogicalKeyboardKey.arrowUp ||
+            key == LogicalKeyboardKey.arrowDown) {
+          if (key == LogicalKeyboardKey.arrowUp) {
+            scope.previousFocus();
+          } else {
+            scope.nextFocus();
+          }
+          _onUserInteraction();
+          return KeyEventResult.handled;
+        }
+      }
+
       // ESC 键退出全屏
-      if (event.logicalKey == LogicalKeyboardKey.escape) {
+      if (key == LogicalKeyboardKey.escape) {
         if (_isFullscreen) {
           _toggleFullscreen();
           return KeyEventResult.handled;
         }
       }
       // 空格键播放/暂停
-      else if (event.logicalKey == LogicalKeyboardKey.space) {
+      else if (key == LogicalKeyboardKey.space) {
         _onUserInteraction();
         if (widget.player.state.playing) {
           widget.player.pause();
@@ -474,8 +509,13 @@ class _PCPlayerControlsState extends State<PCPlayerControls> {
         return KeyEventResult.handled;
       }
       // Enter / Select 键播放或暂停（TV 遥控器）
-      else if (event.logicalKey == LogicalKeyboardKey.enter ||
-          event.logicalKey == LogicalKeyboardKey.select) {
+      else if (key == LogicalKeyboardKey.enter ||
+          key == LogicalKeyboardKey.select) {
+        // TV 上如果已有子控件获取焦点，让子控件先响应“确认键”
+        if (isAndroidTv && FocusManager.instance.primaryFocus != _focusNode) {
+          return KeyEventResult.ignored;
+        }
+
         _onUserInteraction();
         if (widget.player.state.playing) {
           widget.player.pause();
@@ -487,7 +527,7 @@ class _PCPlayerControlsState extends State<PCPlayerControls> {
         return KeyEventResult.handled;
       }
       // F 键切换全屏
-      else if (event.logicalKey == LogicalKeyboardKey.keyF) {
+      else if (key == LogicalKeyboardKey.keyF) {
         if (_isWebFullscreen) {
           _toggleWebFullscreen();
           return KeyEventResult.handled;
@@ -496,7 +536,7 @@ class _PCPlayerControlsState extends State<PCPlayerControls> {
         return KeyEventResult.handled;
       }
       // 左方向键快退 10 秒
-      else if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
+      else if (key == LogicalKeyboardKey.arrowLeft) {
         final currentPosition = widget.player.state.position;
         final newPosition = currentPosition - const Duration(seconds: 10);
         final clampedPosition = Duration(
@@ -509,7 +549,7 @@ class _PCPlayerControlsState extends State<PCPlayerControls> {
         return KeyEventResult.handled;
       }
       // 右方向键快进 10 秒
-      else if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
+      else if (key == LogicalKeyboardKey.arrowRight) {
         final currentPosition = widget.player.state.position;
         final duration = widget.player.state.duration;
         final newPosition = currentPosition + const Duration(seconds: 10);
@@ -523,7 +563,7 @@ class _PCPlayerControlsState extends State<PCPlayerControls> {
         return KeyEventResult.handled;
       }
       // 上方向键增加音量 10%
-      else if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
+      else if (key == LogicalKeyboardKey.arrowUp) {
         final currentVolume = widget.player.state.volume;
         final newVolume = (currentVolume + 10).clamp(0.0, 100.0);
         widget.player.setVolume(newVolume);
@@ -533,7 +573,7 @@ class _PCPlayerControlsState extends State<PCPlayerControls> {
         return KeyEventResult.handled;
       }
       // 下方向键减少音量 10%
-      else if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
+      else if (key == LogicalKeyboardKey.arrowDown) {
         final currentVolume = widget.player.state.volume;
         final newVolume = (currentVolume - 10).clamp(0.0, 100.0);
         widget.player.setVolume(newVolume);
@@ -885,7 +925,7 @@ class _PCPlayerControlsState extends State<PCPlayerControls> {
                                   }
                                 });
                               },
-                              child: GestureDetector(
+                              child: HoverButton(
                                 onTap: () {
                                   _onUserInteraction();
                                   final currentVolume =
@@ -900,20 +940,10 @@ class _PCPlayerControlsState extends State<PCPlayerControls> {
                                   }
                                   setState(() {});
                                 },
-                                child: Container(
-                                  padding: const EdgeInsets.all(8),
-                                  decoration: _isHoveringVolumeButton
-                                      ? BoxDecoration(
-                                          shape: BoxShape.circle,
-                                          color: Colors.grey
-                                              .withValues(alpha: 0.5),
-                                        )
-                                      : null,
-                                  child: Icon(
-                                    _getVolumeIcon(widget.player.state.volume),
-                                    color: Colors.white,
-                                    size: effectiveFullscreen ? 22 : 20,
-                                  ),
+                                child: Icon(
+                                  _getVolumeIcon(widget.player.state.volume),
+                                  color: Colors.white,
+                                  size: effectiveFullscreen ? 22 : 20,
                                 ),
                               ),
                             ),
@@ -924,7 +954,6 @@ class _PCPlayerControlsState extends State<PCPlayerControls> {
                             ),
                           if (!widget.live)
                             MouseRegion(
-                              key: _speedButtonKey,
                               cursor: SystemMouseCursors.click,
                               onEnter: (_) {
                                 setState(() {
@@ -951,18 +980,29 @@ class _PCPlayerControlsState extends State<PCPlayerControls> {
                                   }
                                 });
                               },
-                              child: Container(
-                                padding: const EdgeInsets.all(8),
-                                decoration: _isHoveringSpeedButton
-                                    ? BoxDecoration(
-                                        shape: BoxShape.circle,
-                                        color: Colors.grey.withValues(alpha: 0.5),
-                                      )
-                                    : null,
-                                child: Icon(
-                                  Icons.speed,
-                                  color: Colors.white,
-                                  size: effectiveFullscreen ? 22 : 20,
+                              child: HoverButton(
+                                onTap: () {
+                                  _onUserInteraction();
+                                  final nextVisible = !_showSpeedMenu;
+                                  setState(() {
+                                    _showSpeedMenu = nextVisible;
+                                    _showVolumeMenu = false;
+                                    _controlsVisible = true;
+                                  });
+                                  if (nextVisible) {
+                                    _hideTimer?.cancel();
+                                  } else {
+                                    _startHideTimer();
+                                  }
+                                },
+                                child: Container(
+                                  key: _speedButtonKey,
+                                  padding: EdgeInsets.zero,
+                                  child: Icon(
+                                    Icons.speed,
+                                    color: Colors.white,
+                                    size: effectiveFullscreen ? 22 : 20,
+                                  ),
                                 ),
                               ),
                             ),
@@ -1312,6 +1352,7 @@ class _SpeedMenuItem extends StatefulWidget {
 
 class _SpeedMenuItemState extends State<_SpeedMenuItem> {
   bool _isHovering = false;
+  bool _isFocused = false;
 
   @override
   Widget build(BuildContext context) {
@@ -1319,21 +1360,47 @@ class _SpeedMenuItemState extends State<_SpeedMenuItem> {
       cursor: SystemMouseCursors.click,
       onEnter: (_) => setState(() => _isHovering = true),
       onExit: (_) => setState(() => _isHovering = false),
-      child: GestureDetector(
-        onTap: widget.onTap,
-        child: Container(
-          height: widget.isFullscreen ? 48.0 : 36.0,
-          color: _isHovering
-              ? Colors.white.withValues(alpha: 0.1)
-              : Colors.transparent,
-          alignment: Alignment.center,
-          child: Text(
-            '${widget.speed}x',
-            style: TextStyle(
-              color: widget.isSelected ? Colors.red : Colors.white,
-              fontSize: widget.isFullscreen ? 14 : 12,
-              fontWeight:
-                  widget.isSelected ? FontWeight.bold : FontWeight.normal,
+      child: FocusableActionDetector(
+        onShowFocusHighlight: (value) {
+          if (!mounted) return;
+          setState(() => _isFocused = value);
+        },
+        shortcuts: const {
+          SingleActivator(LogicalKeyboardKey.enter): ActivateIntent(),
+          SingleActivator(LogicalKeyboardKey.select): ActivateIntent(),
+          SingleActivator(LogicalKeyboardKey.space): ActivateIntent(),
+        },
+        actions: {
+          ActivateIntent: CallbackAction<ActivateIntent>(
+            onInvoke: (_) {
+              widget.onTap();
+              return null;
+            },
+          ),
+        },
+        child: GestureDetector(
+          onTap: widget.onTap,
+          child: Container(
+            height: widget.isFullscreen ? 48.0 : 36.0,
+            decoration: BoxDecoration(
+              color: (_isHovering || _isFocused)
+                  ? Colors.white.withValues(alpha: 0.1)
+                  : Colors.transparent,
+              border: Border.all(
+                color: _isFocused ? const Color(0xFF27AE60) : Colors.transparent,
+                width: 1.6,
+              ),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            alignment: Alignment.center,
+            child: Text(
+              '${widget.speed}x',
+              style: TextStyle(
+                color: widget.isSelected ? Colors.red : Colors.white,
+                fontSize: widget.isFullscreen ? 14 : 12,
+                fontWeight:
+                    widget.isSelected ? FontWeight.bold : FontWeight.normal,
+              ),
             ),
           ),
         ),

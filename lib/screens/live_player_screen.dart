@@ -588,8 +588,9 @@ class _LivePlayerScreenState extends State<LivePlayerScreen>
   /// 构建播放器组件
   Widget _buildPlayerWidget() {
     final videoUrl = _currentChannel.url;
+    final useDesktopSurface = DeviceUtils.isPC() || DeviceUtils.isAndroidTVSync();
     return VideoPlayerWidget(
-      surface: DeviceUtils.isPC()
+      surface: useDesktopSurface
           ? VideoPlayerSurface.desktop
           : VideoPlayerSurface.mobile,
       key: ValueKey(_currentChannel.id),
