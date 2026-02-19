@@ -32,7 +32,7 @@ jobs:
         run: yes | sdkmanager --licenses
 
       - name: Install required Android components
-        run: sdkmanager "platform-tools" "ndk;29.0.14033849"
+        run: sdkmanager "platform-tools" "build-tools;34.0.0" "ndk;29.0.14033849"
 
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
@@ -46,28 +46,45 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Build debug APK
-        run: flutter build apk --debug
+      - name: Build debug APK (universal for TV test)
+        run: flutter build apk --debug --target-platform android-arm,android-arm64
 
-      - name: Build release APK
-        run: flutter build apk --release
+      - name: Build release APK (universal)
+        run: flutter build apk --release --target-platform android-arm,android-arm64
 
-      - name: Rename APK files to SeleneTv
+      - name: Build release APK (split per ABI)
+        run: flutter build apk --release --split-per-abi --target-platform android-arm,android-arm64
+
+      - name: Prepare SeleneTv APK files
         run: |
-          cp build/app/outputs/flutter-apk/app-debug.apk build/app/outputs/flutter-apk/SeleneTv-debug.apk
-          cp build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/SeleneTv-release.apk
+          cp build/app/outputs/flutter-apk/app-debug.apk build/app/outputs/flutter-apk/SeleneTv-debug-universal.apk
+          cp build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/SeleneTv-release-universal.apk
+          cp build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk build/app/outputs/flutter-apk/SeleneTv-release-armeabi-v7a.apk
+          cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk build/app/outputs/flutter-apk/SeleneTv-release-arm64-v8a.apk
 
-      - name: Upload debug APK
+      - name: Verify APK signatures and integrity
+        run: |
+          APKSIGNER="$ANDROID_HOME/build-tools/34.0.0/apksigner"
+          for apk in build/app/outputs/flutter-apk/SeleneTv-*.apk; do
+            echo "Verifying $apk"
+            "$APKSIGNER" verify --verbose "$apk"
+            unzip -t "$apk" > /dev/null
+          done
+
+      - name: Generate SHA256 checksums
+        run: |
+          sha256sum build/app/outputs/flutter-apk/SeleneTv-*.apk | tee build/app/outputs/flutter-apk/SeleneTv-SHA256.txt
+
+      - name: Upload SeleneTv APKs and checksums
         uses: actions/upload-artifact@v4
         with:
-          name: SeleneTv-debug-apk
-          path: build/app/outputs/flutter-apk/SeleneTv-debug.apk
-
-      - name: Upload release APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: SeleneTv-release-apk
-          path: build/app/outputs/flutter-apk/SeleneTv-release.apk
+          name: SeleneTv-apks
+          path: |
+            build/app/outputs/flutter-apk/SeleneTv-debug-universal.apk
+            build/app/outputs/flutter-apk/SeleneTv-release-universal.apk
+            build/app/outputs/flutter-apk/SeleneTv-release-armeabi-v7a.apk
+            build/app/outputs/flutter-apk/SeleneTv-release-arm64-v8a.apk
+            build/app/outputs/flutter-apk/SeleneTv-SHA256.txt
 
       - name: Publish GitHub Release with APKs
         uses: softprops/action-gh-release@v2
@@ -79,5 +96,8 @@ jobs:
           generate_release_notes: true
           make_latest: false
           files: |
-            build/app/outputs/flutter-apk/SeleneTv-debug.apk
-            build/app/outputs/flutter-apk/SeleneTv-release.apk
+            build/app/outputs/flutter-apk/SeleneTv-debug-universal.apk
+            build/app/outputs/flutter-apk/SeleneTv-release-universal.apk
+            build/app/outputs/flutter-apk/SeleneTv-release-armeabi-v7a.apk
+            build/app/outputs/flutter-apk/SeleneTv-release-arm64-v8a.apk
+            build/app/outputs/flutter-apk/SeleneTv-SHA256.txt
