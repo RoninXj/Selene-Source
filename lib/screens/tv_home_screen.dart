@@ -5,14 +5,18 @@ import 'package:provider/provider.dart';
 
 import '../models/douban_movie.dart';
 import '../models/favorite_item.dart';
+import '../models/live_channel.dart';
+import '../models/live_source.dart';
 import '../models/play_record.dart';
 import '../models/search_result.dart';
 import '../services/api_service.dart';
+import '../services/live_service.dart';
 import '../services/page_cache_service.dart';
 import '../services/search_service.dart';
 import '../services/theme_service.dart';
 import '../services/user_data_service.dart';
 import '../utils/font_utils.dart';
+import 'live_player_screen.dart';
 import 'player_screen.dart';
 
 class TvHomeScreen extends StatefulWidget {
@@ -39,6 +43,14 @@ class _TvHomeScreenState extends State<TvHomeScreen> {
   List<DoubanMovie> _tvs = [];
   List<DoubanMovie> _shows = [];
   List<SearchResult> _searchResults = [];
+
+  bool _liveInitialized = false;
+  bool _liveLoading = false;
+  String? _liveError;
+  List<LiveSource> _liveSources = [];
+  LiveSource? _currentLiveSource;
+  List<LiveChannel> _liveChannels = [];
+  String _selectedLiveGroup = '全部';
 
   @override
   void initState() {
@@ -191,6 +203,122 @@ class _TvHomeScreenState extends State<TvHomeScreen> {
       ),
     );
     if (mounted) _loadData();
+  }
+
+  void _onBottomTabSelected(int i) {
+    final shouldLoadLive = i == 5 && !_liveInitialized;
+    setState(() {
+      _bottomTab = i;
+      _topTab = 0;
+      if (shouldLoadLive) {
+        _liveInitialized = true;
+      }
+    });
+
+    if (shouldLoadLive) {
+      _loadLiveData();
+    }
+  }
+
+  Future<void> _loadLiveData({bool forceRefresh = false, LiveSource? source}) async {
+    setState(() {
+      _liveLoading = true;
+      _liveError = null;
+    });
+
+    try {
+      final sources = await LiveService.getLiveSources(forceRefresh: forceRefresh);
+      final activeSources = sources.where((e) => !e.disabled).toList();
+      if (activeSources.isEmpty) {
+        if (!mounted) return;
+        setState(() {
+          _liveSources = [];
+          _currentLiveSource = null;
+          _liveChannels = [];
+          _selectedLiveGroup = '全部';
+          _liveLoading = false;
+          _liveError = '暂无可用直播源';
+        });
+        return;
+      }
+
+      LiveSource? target = source;
+      if (target == null && _currentLiveSource != null) {
+        for (final item in activeSources) {
+          if (item.key == _currentLiveSource!.key) {
+            target = item;
+            break;
+          }
+        }
+      }
+      target ??= activeSources.first;
+
+      final channels = await LiveService.getLiveChannels(
+        target.key,
+        forceRefresh: forceRefresh,
+      );
+
+      if (!mounted) return;
+      final groups = channels
+          .map((e) => e.group.trim().isEmpty ? '未分组' : e.group.trim())
+          .toSet();
+      var selectedGroup = _selectedLiveGroup;
+      if (selectedGroup != '全部' && !groups.contains(selectedGroup)) {
+        selectedGroup = '全部';
+      }
+
+      setState(() {
+        _liveSources = activeSources;
+        _currentLiveSource = target;
+        _liveChannels = channels;
+        _selectedLiveGroup = selectedGroup;
+        _liveLoading = false;
+        if (channels.isEmpty) {
+          _liveError = '当前直播源暂无频道';
+        }
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _liveLoading = false;
+        _liveError = '直播加载失败: $e';
+      });
+    }
+  }
+
+  Future<void> _openLiveChannel(LiveChannel channel) async {
+    final source = _currentLiveSource;
+    if (source == null) return;
+
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => LivePlayerScreen(
+          channel: channel,
+          source: source,
+        ),
+      ),
+    );
+    if (mounted) {
+      _loadLiveData(source: source);
+    }
+  }
+
+  List<String> _liveGroups() {
+    final groups = _liveChannels
+        .map((e) => e.group.trim().isEmpty ? '未分组' : e.group.trim())
+        .toSet()
+        .toList();
+    groups.sort();
+    return ['全部', ...groups];
+  }
+
+  List<LiveChannel> _filteredLiveChannels() {
+    if (_selectedLiveGroup == '全部') return _liveChannels;
+    return _liveChannels.where((e) {
+      final name = e.group.trim().isEmpty ? '未分组' : e.group.trim();
+      return name == _selectedLiveGroup;
+    }).toList();
   }
 
   @override
@@ -410,6 +538,7 @@ class _TvHomeScreenState extends State<TvHomeScreen> {
   Widget _buildContent(ThemeService theme) {
     if (_topTab == 1) return _buildRecordGrid(theme);
     if (_topTab == 2) return _buildFavoriteGrid(theme);
+    if (_bottomTab == 5) return _buildLiveContent(theme);
 
     final sections = <Widget>[];
     if (_error != null && _searchResults.isEmpty) {
@@ -504,32 +633,318 @@ class _TvHomeScreenState extends State<TvHomeScreen> {
       ));
     }
 
-    if (_bottomTab == 5) {
-      sections.add(
-        Padding(
-          padding: const EdgeInsets.all(12),
-          child: Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: theme.isDarkMode ? const Color(0xFF161616) : Colors.white.withValues(alpha: 0.9),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Text(
-              '直播入口将在 TV 版下一迭代接入。',
-              style: FontUtils.poppins(
-                fontSize: 14,
-                color: theme.isDarkMode ? const Color(0xFFd0d0d0) : const Color(0xFF7f8c8d),
+    return ListView(
+      padding: const EdgeInsets.only(bottom: 8),
+      children: sections,
+    );
+  }
+
+  Widget _buildLiveContent(ThemeService theme) {
+    if (_liveLoading) {
+      return const Center(
+        child: CircularProgressIndicator(
+          color: Color(0xFF27AE60),
+        ),
+      );
+    }
+
+    if (_liveError != null && _liveChannels.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.live_tv_outlined,
+                size: 48,
+                color: theme.isDarkMode ? const Color(0xFF888888) : const Color(0xFF95a5a6),
               ),
-            ),
+              const SizedBox(height: 12),
+              Text(
+                _liveError!,
+                style: FontUtils.poppins(
+                  fontSize: 14,
+                  color: theme.isDarkMode ? const Color(0xFFd0d0d0) : const Color(0xFF7f8c8d),
+                ),
+              ),
+              const SizedBox(height: 12),
+              _FocusBtn(
+                onPressed: () => _loadLiveData(forceRefresh: true),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF27AE60),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    '重试',
+                    style: FontUtils.poppins(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       );
     }
 
-    return ListView(
-      padding: const EdgeInsets.only(bottom: 8),
-      children: sections,
+    final liveChannels = _filteredLiveChannels();
+    final liveGroups = _liveGroups();
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    final crossAxisCount =
+        screenWidth >= 1800 ? 8 : (screenWidth >= 1500 ? 7 : (screenWidth >= 1200 ? 6 : 5));
+
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(10, 0, 10, 6),
+          child: Column(
+            children: [
+              Row(
+                children: [
+                  Text(
+                    '直播源',
+                    style: FontUtils.poppins(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: theme.isDarkMode ? const Color(0xFFffffff) : const Color(0xFF2c3e50),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: SizedBox(
+                      height: 44,
+                      child: ListView.separated(
+                        scrollDirection: Axis.horizontal,
+                        itemCount: _liveSources.length,
+                        separatorBuilder: (_, __) => const SizedBox(width: 8),
+                        itemBuilder: (_, i) {
+                          final source = _liveSources[i];
+                          final active = _currentLiveSource?.key == source.key;
+                          return _FocusBtn(
+                            onPressed: () {
+                              if (!active) {
+                                _loadLiveData(source: source);
+                              }
+                            },
+                            child: _buildLiveFilterPill(
+                              theme: theme,
+                              active: active,
+                              text: source.name,
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  _FocusBtn(
+                    onPressed: () => _loadLiveData(forceRefresh: true),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: theme.isDarkMode ? const Color(0xFF1e1e1e) : Colors.white,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Icon(
+                        Icons.refresh,
+                        size: 18,
+                        color: theme.isDarkMode ? const Color(0xFFb0b0b0) : const Color(0xFF7f8c8d),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Text(
+                    '分组',
+                    style: FontUtils.poppins(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: theme.isDarkMode ? const Color(0xFFffffff) : const Color(0xFF2c3e50),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: SizedBox(
+                      height: 44,
+                      child: ListView.separated(
+                        scrollDirection: Axis.horizontal,
+                        itemCount: liveGroups.length,
+                        separatorBuilder: (_, __) => const SizedBox(width: 8),
+                        itemBuilder: (_, i) {
+                          final group = liveGroups[i];
+                          final active = _selectedLiveGroup == group;
+                          return _FocusBtn(
+                            onPressed: () => setState(() => _selectedLiveGroup = group),
+                            child: _buildLiveFilterPill(
+                              theme: theme,
+                              active: active,
+                              text: group,
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: liveChannels.isEmpty
+              ? Center(
+                  child: Text(
+                    '当前分组暂无频道',
+                    style: FontUtils.poppins(
+                      fontSize: 14,
+                      color: theme.isDarkMode ? const Color(0xFFb0b0b0) : const Color(0xFF7f8c8d),
+                    ),
+                  ),
+                )
+              : GridView.builder(
+                  padding: const EdgeInsets.fromLTRB(10, 0, 10, 8),
+                  itemCount: liveChannels.length,
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: crossAxisCount,
+                    mainAxisSpacing: 10,
+                    crossAxisSpacing: 10,
+                    childAspectRatio: 1.35,
+                  ),
+                  itemBuilder: (_, i) {
+                    final channel = liveChannels[i];
+                    final group = channel.group.trim().isEmpty ? '未分组' : channel.group.trim();
+                    return _FocusBtn(
+                      onPressed: () => _openLiveChannel(channel),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: theme.isDarkMode
+                              ? const Color(0xFF161616)
+                              : Colors.white.withValues(alpha: 0.95),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: ClipRRect(
+                                borderRadius: const BorderRadius.only(
+                                  topLeft: Radius.circular(10),
+                                  topRight: Radius.circular(10),
+                                ),
+                                child: Container(
+                                  width: double.infinity,
+                                  color: theme.isDarkMode
+                                      ? const Color(0xFF232323)
+                                      : const Color(0xFFeef3f6),
+                                  child: channel.logo.isEmpty
+                                      ? Icon(
+                                          Icons.tv,
+                                          size: 28,
+                                          color: theme.isDarkMode
+                                              ? const Color(0xFF777777)
+                                              : const Color(0xFF95a5a6),
+                                        )
+                                      : CachedNetworkImage(
+                                          imageUrl: channel.logo,
+                                          fit: BoxFit.contain,
+                                          errorWidget: (_, __, ___) => Icon(
+                                            Icons.tv,
+                                            size: 28,
+                                            color: theme.isDarkMode
+                                                ? const Color(0xFF777777)
+                                                : const Color(0xFF95a5a6),
+                                          ),
+                                          placeholder: (_, __) => Center(
+                                            child: SizedBox(
+                                              width: 20,
+                                              height: 20,
+                                              child: CircularProgressIndicator(
+                                                strokeWidth: 2,
+                                                color: theme.isDarkMode
+                                                    ? const Color(0xFF888888)
+                                                    : const Color(0xFF95a5a6),
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                ),
+                              ),
+                            ),
+                            Padding(
+                              padding: const EdgeInsets.fromLTRB(8, 7, 8, 8),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    channel.name,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: FontUtils.poppins(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                      color: theme.isDarkMode
+                                          ? const Color(0xFFffffff)
+                                          : const Color(0xFF2c3e50),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 3),
+                                  Text(
+                                    group,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: FontUtils.poppins(
+                                      fontSize: 11,
+                                      color: theme.isDarkMode
+                                          ? const Color(0xFF9f9f9f)
+                                          : const Color(0xFF7f8c8d),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildLiveFilterPill({
+    required ThemeService theme,
+    required bool active,
+    required String text,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: active
+            ? const Color(0xFF27AE60)
+            : (theme.isDarkMode ? const Color(0xFF1e1e1e) : Colors.white),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Text(
+        text,
+        style: FontUtils.poppins(
+          fontSize: 13,
+          fontWeight: active ? FontWeight.w600 : FontWeight.w500,
+          color: active
+              ? Colors.white
+              : (theme.isDarkMode ? const Color(0xFFc0c0c0) : const Color(0xFF7f8c8d)),
+        ),
+      ),
     );
   }
 
@@ -692,10 +1107,7 @@ class _TvHomeScreenState extends State<TvHomeScreen> {
               : (theme.isDarkMode ? const Color(0xFFb0b0b0) : const Color(0xFF7f8c8d));
 
           return _FocusBtn(
-            onPressed: () => setState(() {
-              _bottomTab = i;
-              _topTab = 0;
-            }),
+            onPressed: () => _onBottomTabSelected(i),
             child: SizedBox(
               width: 72,
               child: Column(
