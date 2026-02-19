@@ -175,6 +175,227 @@ class _TvHomeScreenState extends State<TvHomeScreen> {
     if (mounted) _loadData();
   }
 
+  Future<void> _deletePlayRecord(PlayRecord item) async {
+    final result =
+        await PageCacheService().deletePlayRecord(item.source, item.id, context);
+    if (!mounted) return;
+
+    if (result.success) {
+      setState(() {
+        _records.removeWhere(
+          (e) => e.source == item.source && e.id == item.id,
+        );
+      });
+      _showOperationFeedback('已删除播放记录');
+      return;
+    }
+
+    _showOperationFeedback(result.errorMessage ?? '删除播放记录失败', isError: true);
+  }
+
+  Future<void> _deleteFavorite(FavoriteItem item) async {
+    final result =
+        await PageCacheService().removeFavorite(item.source, item.id, context);
+    if (!mounted) return;
+
+    if (result.success) {
+      setState(() {
+        _favorites.removeWhere(
+          (e) => e.source == item.source && e.id == item.id,
+        );
+      });
+      _showOperationFeedback('已取消收藏');
+      return;
+    }
+
+    _showOperationFeedback(result.errorMessage ?? '取消收藏失败', isError: true);
+  }
+
+  void _showOperationFeedback(String message, {bool isError = false}) {
+    if (!mounted) return;
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    messenger
+      ?..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(message),
+          behavior: SnackBarBehavior.floating,
+          backgroundColor:
+              isError ? const Color(0xFFe74c3c) : const Color(0xFF27AE60),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+  }
+
+  Future<void> _showRecordActions(PlayRecord item) {
+    return _showTvActionDialog(
+      title: item.title,
+      subtitle: item.sourceName,
+      actions: [
+        _TvCardAction(
+          label: '播放',
+          icon: Icons.play_arrow_rounded,
+          onPressed: () => _openRecord(item),
+        ),
+        _TvCardAction(
+          label: '删除记录',
+          icon: Icons.delete_outline_rounded,
+          isDestructive: true,
+          onPressed: () => _deletePlayRecord(item),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _showFavoriteActions(FavoriteItem item) {
+    return _showTvActionDialog(
+      title: item.title,
+      subtitle: item.sourceName,
+      actions: [
+        _TvCardAction(
+          label: '播放',
+          icon: Icons.play_arrow_rounded,
+          onPressed: () => _openFavorite(item),
+        ),
+        _TvCardAction(
+          label: '取消收藏',
+          icon: Icons.favorite_border_rounded,
+          isDestructive: true,
+          onPressed: () => _deleteFavorite(item),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _showTvActionDialog({
+    required String title,
+    String? subtitle,
+    required List<_TvCardAction> actions,
+  }) async {
+    if (actions.isEmpty) return;
+    final theme = context.read<ThemeService>();
+
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      builder: (dialogContext) {
+        final isDarkMode = theme.isDarkMode;
+        return Dialog(
+          backgroundColor:
+              isDarkMode ? const Color(0xFF161616) : const Color(0xFFF8FAFB),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 460, minWidth: 360),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: FontUtils.poppins(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: isDarkMode
+                          ? const Color(0xFFf5f5f5)
+                          : const Color(0xFF2c3e50),
+                    ),
+                  ),
+                  if (subtitle != null && subtitle.trim().isNotEmpty) ...[
+                    const SizedBox(height: 3),
+                    Text(
+                      subtitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: FontUtils.poppins(
+                        fontSize: 12,
+                        color: isDarkMode
+                            ? const Color(0xFFa9a9a9)
+                            : const Color(0xFF7f8c8d),
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 12),
+                  ...List.generate(actions.length, (i) {
+                    final action = actions[i];
+                    final actionColor = action.isDestructive
+                        ? const Color(0xFFe74c3c)
+                        : (isDarkMode
+                            ? const Color(0xFFd8d8d8)
+                            : const Color(0xFF2c3e50));
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: _FocusBtn(
+                        autofocus: i == 0,
+                        onPressed: () {
+                          Navigator.of(dialogContext).pop();
+                          action.onPressed();
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 10,
+                          ),
+                          decoration: BoxDecoration(
+                            color: isDarkMode
+                                ? const Color(0xFF1f1f1f)
+                                : Colors.white,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(action.icon, size: 20, color: actionColor),
+                              const SizedBox(width: 10),
+                              Text(
+                                action.label,
+                                style: FontUtils.poppins(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: actionColor,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    );
+                  }),
+                  _FocusBtn(
+                    onPressed: () => Navigator.of(dialogContext).pop(),
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      decoration: BoxDecoration(
+                        color: isDarkMode
+                            ? const Color(0xFF252525)
+                            : const Color(0xFFE8ECEF),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      alignment: Alignment.center,
+                      child: Text(
+                        '取消',
+                        style: FontUtils.poppins(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: isDarkMode
+                              ? const Color(0xFFd0d0d0)
+                              : const Color(0xFF7f8c8d),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   Future<void> _openSearch(SearchResult item) async {
     await Navigator.push(
       context,
@@ -606,6 +827,7 @@ class _TvHomeScreenState extends State<TvHomeScreen> {
             poster: e.cover,
             badge: '${e.index}/${e.totalEpisodes}',
             onTap: () => _openRecord(e),
+            onSecondaryAction: () => _showRecordActions(e),
           );
         }).toList(),
       ));
@@ -758,6 +980,7 @@ class _TvHomeScreenState extends State<TvHomeScreen> {
                                 _loadLiveData(source: source);
                               }
                             },
+                            ensureVisibleOnFocus: true,
                             child: _buildLiveFilterPill(
                               theme: theme,
                               active: active,
@@ -810,6 +1033,7 @@ class _TvHomeScreenState extends State<TvHomeScreen> {
                           final active = _selectedLiveGroup == group;
                           return _FocusBtn(
                             onPressed: () => setState(() => _selectedLiveGroup = group),
+                            ensureVisibleOnFocus: true,
                             child: _buildLiveFilterPill(
                               theme: theme,
                               active: active,
@@ -850,6 +1074,7 @@ class _TvHomeScreenState extends State<TvHomeScreen> {
                     final group = channel.group.trim().isEmpty ? '未分组' : channel.group.trim();
                     return _FocusBtn(
                       onPressed: () => _openLiveChannel(channel),
+                      ensureVisibleOnFocus: true,
                       child: Container(
                         decoration: BoxDecoration(
                           color: theme.isDarkMode
@@ -1016,6 +1241,9 @@ class _TvHomeScreenState extends State<TvHomeScreen> {
                 width: 172,
                 child: _FocusBtn(
                   onPressed: item.onTap,
+                  onLongPress: item.onSecondaryAction,
+                  onSecondaryAction: item.onSecondaryAction,
+                  ensureVisibleOnFocus: true,
                   child: _PosterCard(item: item, dark: theme.isDarkMode),
                 ),
               );
@@ -1061,6 +1289,9 @@ class _TvHomeScreenState extends State<TvHomeScreen> {
         final e = _records[i];
         return _FocusBtn(
           onPressed: () => _openRecord(e),
+          onLongPress: () => _showRecordActions(e),
+          onSecondaryAction: () => _showRecordActions(e),
+          ensureVisibleOnFocus: true,
           child: _PosterCard(
             dark: theme.isDarkMode,
             item: _PosterItem(
@@ -1069,6 +1300,7 @@ class _TvHomeScreenState extends State<TvHomeScreen> {
               poster: e.cover,
               badge: '${e.index}/${e.totalEpisodes}',
               onTap: () => _openRecord(e),
+              onSecondaryAction: () => _showRecordActions(e),
             ),
           ),
         );
@@ -1111,6 +1343,9 @@ class _TvHomeScreenState extends State<TvHomeScreen> {
         final e = _favorites[i];
         return _FocusBtn(
           onPressed: () => _openFavorite(e),
+          onLongPress: () => _showFavoriteActions(e),
+          onSecondaryAction: () => _showFavoriteActions(e),
+          ensureVisibleOnFocus: true,
           child: _PosterCard(
             dark: theme.isDarkMode,
             item: _PosterItem(
@@ -1119,6 +1354,7 @@ class _TvHomeScreenState extends State<TvHomeScreen> {
               poster: e.cover,
               badge: e.totalEpisodes > 0 ? '${e.totalEpisodes}集' : null,
               onTap: () => _openFavorite(e),
+              onSecondaryAction: () => _showFavoriteActions(e),
             ),
           ),
         );
@@ -1183,6 +1419,7 @@ class _PosterItem {
   final String poster;
   final String? badge;
   final VoidCallback onTap;
+  final VoidCallback? onSecondaryAction;
 
   const _PosterItem({
     required this.title,
@@ -1190,7 +1427,26 @@ class _PosterItem {
     required this.poster,
     this.badge,
     required this.onTap,
+    this.onSecondaryAction,
   });
+}
+
+class _TvCardAction {
+  final String label;
+  final IconData icon;
+  final bool isDestructive;
+  final Future<void> Function() onPressed;
+
+  const _TvCardAction({
+    required this.label,
+    required this.icon,
+    this.isDestructive = false,
+    required this.onPressed,
+  });
+}
+
+class _SecondaryActionIntent extends Intent {
+  const _SecondaryActionIntent();
 }
 
 class _PosterCard extends StatelessWidget {
@@ -1307,8 +1563,19 @@ class _PosterCard extends StatelessWidget {
 class _FocusBtn extends StatefulWidget {
   final Widget child;
   final VoidCallback onPressed;
+  final VoidCallback? onLongPress;
+  final VoidCallback? onSecondaryAction;
+  final bool ensureVisibleOnFocus;
+  final bool autofocus;
 
-  const _FocusBtn({required this.child, required this.onPressed});
+  const _FocusBtn({
+    required this.child,
+    required this.onPressed,
+    this.onLongPress,
+    this.onSecondaryAction,
+    this.ensureVisibleOnFocus = false,
+    this.autofocus = false,
+  });
 
   @override
   State<_FocusBtn> createState() => _FocusBtnState();
@@ -1317,9 +1584,28 @@ class _FocusBtn extends StatefulWidget {
 class _FocusBtnState extends State<_FocusBtn> {
   bool _focused = false;
 
+  void _ensureVisibleInScrollable() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !widget.ensureVisibleOnFocus) return;
+      final context = this.context;
+      if (Scrollable.maybeOf(context) == null) return;
+      Scrollable.ensureVisible(
+        context,
+        duration: const Duration(milliseconds: 140),
+        curve: Curves.easeOutCubic,
+        alignment: 0.45,
+        alignmentPolicy: ScrollPositionAlignmentPolicy.keepVisibleAtEnd,
+      );
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return FocusableActionDetector(
+      autofocus: widget.autofocus,
+      onFocusChange: (value) {
+        if (value) _ensureVisibleInScrollable();
+      },
       onShowFocusHighlight: (value) {
         if (!mounted) return;
         setState(() => _focused = value);
@@ -1328,11 +1614,19 @@ class _FocusBtnState extends State<_FocusBtn> {
         SingleActivator(LogicalKeyboardKey.enter): ActivateIntent(),
         SingleActivator(LogicalKeyboardKey.select): ActivateIntent(),
         SingleActivator(LogicalKeyboardKey.space): ActivateIntent(),
+        SingleActivator(LogicalKeyboardKey.contextMenu): _SecondaryActionIntent(),
+        SingleActivator(LogicalKeyboardKey.keyM): _SecondaryActionIntent(),
       },
       actions: {
         ActivateIntent: CallbackAction<ActivateIntent>(
           onInvoke: (_) {
             widget.onPressed();
+            return null;
+          },
+        ),
+        _SecondaryActionIntent: CallbackAction<_SecondaryActionIntent>(
+          onInvoke: (_) {
+            widget.onSecondaryAction?.call();
             return null;
           },
         ),
@@ -1363,6 +1657,7 @@ class _FocusBtnState extends State<_FocusBtn> {
             borderRadius: BorderRadius.circular(10),
             child: InkWell(
               onTap: widget.onPressed,
+              onLongPress: widget.onLongPress ?? widget.onSecondaryAction,
               borderRadius: BorderRadius.circular(10),
               child: widget.child,
             ),
