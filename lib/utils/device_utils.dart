@@ -1,9 +1,13 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 /// 设备类型工具类
 class DeviceUtils {
+  static const MethodChannel _deviceChannel = MethodChannel('selene/device');
+  static bool? _isAndroidTvCache;
+
   // 平板的最小宽度阈值（dp）
   static const double tabletMinWidth = 600.0;
 
@@ -11,7 +15,7 @@ class DeviceUtils {
   ///
   /// 通过屏幕宽度判断，宽度 >= 600dp 视为平板
   static bool isTablet(BuildContext context) {
-    if (isPC()) {
+    if (isPC() || isAndroidTVSync()) {
       return true;
     }
     final double width = MediaQuery.of(context).size.width;
@@ -47,6 +51,32 @@ class DeviceUtils {
   /// 判断当前平台是否是 PC（Windows 或 macOS）
   static bool isPC() {
     return isWindows() || isMacOS();
+  }
+
+  /// 判断当前设备是否为 Android TV
+  static Future<bool> isAndroidTV() async {
+    if (!Platform.isAndroid) {
+      _isAndroidTvCache = false;
+      return false;
+    }
+
+    if (_isAndroidTvCache != null) {
+      return _isAndroidTvCache!;
+    }
+
+    try {
+      final isTv = await _deviceChannel.invokeMethod<bool>('isAndroidTv') ?? false;
+      _isAndroidTvCache = isTv;
+      return isTv;
+    } catch (_) {
+      _isAndroidTvCache = false;
+      return false;
+    }
+  }
+
+  /// 同步读取 Android TV 缓存结果
+  static bool isAndroidTVSync() {
+    return _isAndroidTvCache ?? false;
   }
 
   /// 根据屏幕宽度动态计算平板模式下的列数（6～8列）

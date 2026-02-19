@@ -9,7 +9,7 @@ import '../services/subscription_service.dart';
 import '../utils/device_utils.dart';
 import '../utils/font_utils.dart';
 import '../widgets/windows_title_bar.dart';
-import 'home_screen.dart';
+import 'root_home_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -343,7 +343,7 @@ class _LoginScreenState extends State<LoginScreen> {
             // 跳转到首页，并清除所有路由栈（强制销毁所有旧页面）
             if (mounted) {
               Navigator.of(context).pushAndRemoveUntil(
-                MaterialPageRoute(builder: (context) => const HomeScreen()),
+                MaterialPageRoute(builder: (context) => const RootHomeScreen()),
                 (route) => false,
               );
             }
@@ -489,7 +489,7 @@ class _LoginScreenState extends State<LoginScreen> {
         // 跳转到首页，并清除所有路由栈（强制销毁所有旧页面）
         if (mounted) {
           Navigator.of(context).pushAndRemoveUntil(
-            MaterialPageRoute(builder: (context) => const HomeScreen()),
+            MaterialPageRoute(builder: (context) => const RootHomeScreen()),
             (route) => false,
           );
         }

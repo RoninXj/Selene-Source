@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:http/http.dart' as http;
 import 'screens/login_screen.dart';
-import 'screens/home_screen.dart';
+import 'screens/root_home_screen.dart';
 import 'services/user_data_service.dart';
 import 'services/api_service.dart';
 import 'services/theme_service.dart';
@@ -140,7 +140,7 @@ class _AppWrapperState extends State<AppWrapper> {
         // 无论刷新成功与否，都进入首页
         if (mounted) {
           Navigator.of(context).pushReplacement(
-            MaterialPageRoute(builder: (context) => const HomeScreen()),
+            MaterialPageRoute(builder: (context) => const RootHomeScreen()),
           );
         }
       }
@@ -165,7 +165,7 @@ class _AppWrapperState extends State<AppWrapper> {
         if (loginResult.success) {
           // 自动登录成功，进入首页
           Navigator.of(context).pushReplacement(
-            MaterialPageRoute(builder: (context) => const HomeScreen()),
+            MaterialPageRoute(builder: (context) => const RootHomeScreen()),
           );
         } else {
           // 自动登录失败，进入登录页

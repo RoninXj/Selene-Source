@@ -453,6 +453,19 @@ class _PCPlayerControlsState extends State<PCPlayerControls> {
         setState(() {});
         return KeyEventResult.handled;
       }
+      // Enter / Select 键播放或暂停（TV 遥控器）
+      else if (event.logicalKey == LogicalKeyboardKey.enter ||
+          event.logicalKey == LogicalKeyboardKey.select) {
+        _onUserInteraction();
+        if (widget.player.state.playing) {
+          widget.player.pause();
+          widget.onPause?.call();
+        } else {
+          widget.player.play();
+        }
+        setState(() {});
+        return KeyEventResult.handled;
+      }
       // F 键切换全屏
       else if (event.logicalKey == LogicalKeyboardKey.keyF) {
         if (_isWebFullscreen) {

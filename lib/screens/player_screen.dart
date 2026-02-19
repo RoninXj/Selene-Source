@@ -57,6 +57,7 @@ class _PlayerScreenState extends State<PlayerScreen>
   // 缓存设备类型，避免分辨率变化时改变布局
   late bool _isTablet;
   late bool _isPortraitTablet;
+  bool _isAndroidTv = false;
 
   // 加载状态
   bool _isLoading = true;
@@ -133,6 +134,7 @@ class _PlayerScreenState extends State<PlayerScreen>
   @override
   void initState() {
     super.initState();
+    _initDeviceFlags();
     _refreshAnimationController = AnimationController(
       duration: const Duration(milliseconds: 1000),
       vsync: this,
@@ -151,6 +153,14 @@ class _PlayerScreenState extends State<PlayerScreen>
     )..repeat();
     // 添加应用生命周期监听器
     WidgetsBinding.instance.addObserver(this);
+  }
+
+  Future<void> _initDeviceFlags() async {
+    final isTv = await DeviceUtils.isAndroidTV();
+    if (!mounted) return;
+    setState(() {
+      _isAndroidTv = isTv;
+    });
   }
 
   /// 设置竖屏方向
@@ -1026,14 +1036,15 @@ class _PlayerScreenState extends State<PlayerScreen>
 
   /// 构建播放器组件
   Widget _buildPlayerWidget() {
-    final isPC = DeviceUtils.isPC();
+    final useDesktopSurface = DeviceUtils.isPC() || _isAndroidTv;
 
     return Stack(
       children: [
         if (!_isCasting)
           VideoPlayerWidget(
-            surface:
-                isPC ? VideoPlayerSurface.desktop : VideoPlayerSurface.mobile,
+            surface: useDesktopSurface
+                ? VideoPlayerSurface.desktop
+                : VideoPlayerSurface.mobile,
             url: null,
             onBackPressed: _onBackPressed,
             onControllerCreated: (controller) {
