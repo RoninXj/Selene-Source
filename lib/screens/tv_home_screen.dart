@@ -16,6 +16,7 @@ import '../services/search_service.dart';
 import '../services/theme_service.dart';
 import '../services/user_data_service.dart';
 import '../utils/font_utils.dart';
+import '../widgets/user_menu.dart';
 import 'live_player_screen.dart';
 import 'player_screen.dart';
 
@@ -304,6 +305,26 @@ class _TvHomeScreenState extends State<TvHomeScreen> {
     }
   }
 
+  Future<void> _openUserMenu() async {
+    final isDarkMode = context.read<ThemeService>().isDarkMode;
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (routeContext) => Scaffold(
+          backgroundColor: Colors.transparent,
+          body: UserMenu(
+            isDarkMode: isDarkMode,
+            onClose: () => Navigator.of(routeContext).pop(),
+          ),
+        ),
+      ),
+    );
+    if (mounted) {
+      _loadData();
+    }
+  }
+
   List<String> _liveGroups() {
     final groups = _liveChannels
         .map((e) => e.group.trim().isEmpty ? '未分组' : e.group.trim())
@@ -413,7 +434,7 @@ class _TvHomeScreenState extends State<TvHomeScreen> {
           ),
           const SizedBox(width: 8),
           _FocusBtn(
-            onPressed: () {},
+            onPressed: _openUserMenu,
             child: Icon(Icons.person_outline, color: fg, size: 22),
           ),
         ],
