@@ -1113,9 +1113,10 @@ class _LivePlayerScreenState extends State<LivePlayerScreen>
       orElse: () => options.first,
     );
     final isDefault = selectedValue == '全部' || selectedValue.isEmpty;
+    final useDesktopSelector = DeviceUtils.isPC() || DeviceUtils.isAndroidTVSync();
 
     return FilterPillHover(
-      isPC: DeviceUtils.isPC(),
+      isPC: useDesktopSelector,
       isDefault: isDefault,
       title: title,
       selectedOption: selectedOption,
@@ -1131,7 +1132,7 @@ class _LivePlayerScreenState extends State<LivePlayerScreen>
       List<SelectorOption> options,
       String selectedValue,
       ValueChanged<String> onSelected) {
-    if (DeviceUtils.isPC()) {
+    if (DeviceUtils.isPC() || DeviceUtils.isAndroidTVSync()) {
       // PC端使用 filter_options_selector.dart 中的 PC 组件
       showFilterOptionsSelector(
         context: context,

@@ -130,6 +130,7 @@ class FilterOptionHover extends StatefulWidget {
 
 class _FilterOptionHoverState extends State<FilterOptionHover> {
   bool _isHovered = false;
+  bool _isFocused = false;
 
   @override
   Widget build(BuildContext context) {
@@ -150,28 +151,51 @@ class _FilterOptionHoverState extends State<FilterOptionHover> {
       onEnter: (_) => setState(() => _isHovered = true),
       onExit: (_) => setState(() => _isHovered = false),
       cursor: SystemMouseCursors.click,
-      child: InkWell(
-        onTap: widget.onTap,
-        borderRadius: BorderRadius.circular(8),
-        child: Container(
-          alignment: Alignment.center,
-          padding: shouldUseCompactLayout
-              ? const EdgeInsets.symmetric(horizontal: 8, vertical: 4)
-              : null,
-          decoration: BoxDecoration(
-            color: widget.isSelected
-                ? const Color(0xFF27AE60)
-                : Theme.of(context).chipTheme.backgroundColor,
-            borderRadius: BorderRadius.circular(8),
+      child: FocusableActionDetector(
+        onShowFocusHighlight: (value) {
+          if (!mounted) return;
+          setState(() => _isFocused = value);
+        },
+        shortcuts: const {
+          SingleActivator(LogicalKeyboardKey.enter): ActivateIntent(),
+          SingleActivator(LogicalKeyboardKey.select): ActivateIntent(),
+          SingleActivator(LogicalKeyboardKey.space): ActivateIntent(),
+        },
+        actions: {
+          ActivateIntent: CallbackAction<ActivateIntent>(
+            onInvoke: (_) {
+              widget.onTap();
+              return null;
+            },
           ),
-          child: Text(
-            widget.label,
-            textAlign: shouldUseCompactLayout ? TextAlign.center : null,
-            maxLines: shouldUseCompactLayout ? 2 : null,
-            overflow: shouldUseCompactLayout ? TextOverflow.ellipsis : null,
-            style: TextStyle(
-              color: textColor,
-              fontSize: shouldUseCompactLayout ? 12 : null,
+        },
+        child: InkWell(
+          onTap: widget.onTap,
+          borderRadius: BorderRadius.circular(8),
+          child: Container(
+            alignment: Alignment.center,
+            padding: shouldUseCompactLayout
+                ? const EdgeInsets.symmetric(horizontal: 8, vertical: 4)
+                : null,
+            decoration: BoxDecoration(
+              color: widget.isSelected
+                  ? const Color(0xFF27AE60)
+                  : Theme.of(context).chipTheme.backgroundColor,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: _isFocused ? const Color(0xFF27AE60) : Colors.transparent,
+                width: 1.6,
+              ),
+            ),
+            child: Text(
+              widget.label,
+              textAlign: shouldUseCompactLayout ? TextAlign.center : null,
+              maxLines: shouldUseCompactLayout ? 2 : null,
+              overflow: shouldUseCompactLayout ? TextOverflow.ellipsis : null,
+              style: TextStyle(
+                color: textColor,
+                fontSize: shouldUseCompactLayout ? 12 : null,
+              ),
             ),
           ),
         ),

@@ -1039,11 +1039,20 @@ class _TvHomeScreenState extends State<TvHomeScreen> {
       );
     }
 
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    final crossAxisCount = screenWidth >= 1920
+        ? 7
+        : (screenWidth >= 1600
+            ? 6
+            : (screenWidth >= 1280
+                ? 5
+                : (screenWidth >= 960 ? 4 : 3)));
+
     return GridView.builder(
       padding: const EdgeInsets.fromLTRB(10, 6, 10, 8),
       itemCount: _records.length,
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 7,
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: crossAxisCount,
         mainAxisSpacing: 10,
         crossAxisSpacing: 10,
         childAspectRatio: 0.62,
@@ -1080,11 +1089,20 @@ class _TvHomeScreenState extends State<TvHomeScreen> {
       );
     }
 
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    final crossAxisCount = screenWidth >= 1920
+        ? 7
+        : (screenWidth >= 1600
+            ? 6
+            : (screenWidth >= 1280
+                ? 5
+                : (screenWidth >= 960 ? 4 : 3)));
+
     return GridView.builder(
       padding: const EdgeInsets.fromLTRB(10, 6, 10, 8),
       itemCount: _favorites.length,
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 7,
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: crossAxisCount,
         mainAxisSpacing: 10,
         crossAxisSpacing: 10,
         childAspectRatio: 0.62,

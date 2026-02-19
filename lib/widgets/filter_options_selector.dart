@@ -17,7 +17,7 @@ void showFilterOptionsSelector({
   // 计算GridView的高度：行数 * (item高度 + 间距) + padding
   final gridHeight = rowCount * (40.0 + 10.0) - 10.0 + 32.0; // 32.0是上下padding
 
-  if (DeviceUtils.isPC()) {
+  if (DeviceUtils.isPC() || DeviceUtils.isAndroidTVSync()) {
     // PC端显示居中对话框 - 紧凑4列设计
     final isDark = Theme.of(context).brightness == Brightness.dark;
     showDialog(
