@@ -10,7 +10,6 @@ import '../services/page_cache_service.dart';
 import '../services/live_service.dart';
 import '../services/local_search_cache_service.dart';
 import '../services/version_service.dart';
-import '../utils/device_utils.dart';
 import '../utils/font_utils.dart';
 import 'update_dialog.dart';
 
@@ -502,6 +501,13 @@ class _UserMenuState extends State<UserMenu> {
     );
   }
 
+  Future<void> _openProjectHomepage() async {
+    final url = Uri.parse('https://github.com/MoonTechLab/Selene');
+    if (await canLaunchUrl(url)) {
+      await launchUrl(url, mode: LaunchMode.externalApplication);
+    }
+  }
+
   Widget _buildInputOption({
     required String title,
     required String currentValue,
@@ -579,39 +585,40 @@ class _UserMenuState extends State<UserMenu> {
   }) {
     return Material(
       color: Colors.transparent,
-      child: Container(
-        padding: const EdgeInsets.symmetric(
-          horizontal: 16,
-          vertical: 10,
-        ),
-        child: Row(
-          children: [
-            Icon(
-              icon,
-              size: 20,
-              color: widget.isDarkMode
-                  ? const Color(0xFF9ca3af)
-                  : const Color(0xFF6b7280),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                title,
-                style: FontUtils.poppins(
-                  fontSize: 16,
-                  color: widget.isDarkMode
-                      ? const Color(0xFFffffff)
-                      : const Color(0xFF1f2937),
-                  fontWeight: FontWeight.w500,
+      child: InkWell(
+        onTap: () async {
+          await onChanged(!value);
+          setState(() {});
+        },
+        focusColor: const Color(0xFF10b981).withValues(alpha: 0.14),
+        child: Container(
+          padding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 10,
+          ),
+          child: Row(
+            children: [
+              Icon(
+                icon,
+                size: 20,
+                color: widget.isDarkMode
+                    ? const Color(0xFF9ca3af)
+                    : const Color(0xFF6b7280),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  title,
+                  style: FontUtils.poppins(
+                    fontSize: 16,
+                    color: widget.isDarkMode
+                        ? const Color(0xFFffffff)
+                        : const Color(0xFF1f2937),
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
               ),
-            ),
-            GestureDetector(
-              onTap: () async {
-                await onChanged(!value);
-                setState(() {});
-              },
-              child: AnimatedContainer(
+              AnimatedContainer(
                 duration: const Duration(milliseconds: 200),
                 width: 44,
                 height: 24,
@@ -638,8 +645,8 @@ class _UserMenuState extends State<UserMenu> {
                   ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -957,19 +964,13 @@ class _UserMenuState extends State<UserMenu> {
                           : const Color(0xFFe5e7eb),
                     ),
                     // 版本号
-                    MouseRegion(
-                      cursor: DeviceUtils.isPC()
-                          ? SystemMouseCursors.click
-                          : MouseCursor.defer,
-                      child: GestureDetector(
-                        onTap: () async {
-                          final url = Uri.parse(
-                              'https://github.com/MoonTechLab/Selene');
-                          if (await canLaunchUrl(url)) {
-                            await launchUrl(url,
-                                mode: LaunchMode.externalApplication);
-                          }
-                        },
+                    Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        onTap: _openProjectHomepage,
+                        onLongPress: _openProjectHomepage,
+                        canRequestFocus: true,
+                        focusColor: const Color(0xFF10b981).withValues(alpha: 0.14),
                         child: Container(
                           padding: const EdgeInsets.symmetric(
                             horizontal: 20,

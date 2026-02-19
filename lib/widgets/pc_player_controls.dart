@@ -24,6 +24,7 @@ class HoverButton extends StatefulWidget {
 
 class _HoverButtonState extends State<HoverButton> {
   bool _isHovering = false;
+  bool _isFocused = false;
 
   @override
   Widget build(BuildContext context) {
@@ -31,18 +32,37 @@ class _HoverButtonState extends State<HoverButton> {
       cursor: SystemMouseCursors.click,
       onEnter: (_) => setState(() => _isHovering = true),
       onExit: (_) => setState(() => _isHovering = false),
-      child: GestureDetector(
-        onTap: widget.onTap,
-        behavior: HitTestBehavior.opaque,
-        child: Container(
-          padding: widget.padding,
-          decoration: _isHovering
-              ? BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: Colors.grey.withValues(alpha: 0.5),
-                )
-              : null,
-          child: widget.child,
+      child: FocusableActionDetector(
+        onShowFocusHighlight: (value) {
+          if (!mounted) return;
+          setState(() => _isFocused = value);
+        },
+        shortcuts: const {
+          SingleActivator(LogicalKeyboardKey.enter): ActivateIntent(),
+          SingleActivator(LogicalKeyboardKey.select): ActivateIntent(),
+          SingleActivator(LogicalKeyboardKey.space): ActivateIntent(),
+        },
+        actions: {
+          ActivateIntent: CallbackAction<ActivateIntent>(
+            onInvoke: (_) {
+              widget.onTap();
+              return null;
+            },
+          ),
+        },
+        child: GestureDetector(
+          onTap: widget.onTap,
+          behavior: HitTestBehavior.opaque,
+          child: Container(
+            padding: widget.padding,
+            decoration: (_isHovering || _isFocused)
+                ? BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.grey.withValues(alpha: 0.5),
+                  )
+                : null,
+            child: widget.child,
+          ),
         ),
       ),
     );

@@ -1247,7 +1247,7 @@ class _PlayerScreenState extends State<PlayerScreen>
                     ),
                   ),
                   const SizedBox(width: 12),
-                  GestureDetector(
+                  _HoverButton(
                     onTap: _toggleFavorite,
                     child: Icon(
                       _isFavorite ? Icons.favorite : Icons.favorite_border,
@@ -1325,10 +1325,8 @@ class _PlayerScreenState extends State<PlayerScreen>
 
                   // 详情按钮（平板横屏模式下不显示）
                   if (!(_isTablet && !_isPortraitTablet))
-                    GestureDetector(
-                      onTap: () {
-                        _showDetailsPanel();
-                      },
+                    _HoverButton(
+                      onTap: _showDetailsPanel,
                       child: Stack(
                         children: [
                           Row(
@@ -2996,6 +2994,7 @@ class _HoverBackButton extends StatefulWidget {
 
 class _HoverBackButtonState extends State<_HoverBackButton> {
   bool _isHovering = false;
+  bool _isFocused = false;
 
   @override
   Widget build(BuildContext context) {
@@ -3003,21 +3002,40 @@ class _HoverBackButtonState extends State<_HoverBackButton> {
       cursor: SystemMouseCursors.click,
       onEnter: (_) => setState(() => _isHovering = true),
       onExit: (_) => setState(() => _isHovering = false),
-      child: GestureDetector(
-        onTap: widget.onTap,
-        behavior: HitTestBehavior.opaque,
-        child: Container(
-          padding: const EdgeInsets.all(8),
-          decoration: _isHovering
-              ? BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: Colors.grey.withValues(alpha: 0.5),
-                )
-              : null,
-          child: Icon(
-            Icons.arrow_back,
-            color: widget.iconColor,
-            size: 24,
+      child: FocusableActionDetector(
+        onShowFocusHighlight: (value) {
+          if (!mounted) return;
+          setState(() => _isFocused = value);
+        },
+        shortcuts: const {
+          SingleActivator(LogicalKeyboardKey.enter): ActivateIntent(),
+          SingleActivator(LogicalKeyboardKey.select): ActivateIntent(),
+          SingleActivator(LogicalKeyboardKey.space): ActivateIntent(),
+        },
+        actions: {
+          ActivateIntent: CallbackAction<ActivateIntent>(
+            onInvoke: (_) {
+              widget.onTap();
+              return null;
+            },
+          ),
+        },
+        child: GestureDetector(
+          onTap: widget.onTap,
+          behavior: HitTestBehavior.opaque,
+          child: Container(
+            padding: const EdgeInsets.all(8),
+            decoration: (_isHovering || _isFocused)
+                ? BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.grey.withValues(alpha: 0.5),
+                  )
+                : null,
+            child: Icon(
+              Icons.arrow_back,
+              color: widget.iconColor,
+              size: 24,
+            ),
           ),
         ),
       ),
@@ -3047,6 +3065,7 @@ class _EpisodeCardWithHover extends StatefulWidget {
 
 class _EpisodeCardWithHoverState extends State<_EpisodeCardWithHover> {
   bool _isHovering = false;
+  bool _isFocused = false;
 
   @override
   Widget build(BuildContext context) {
@@ -3064,61 +3083,80 @@ class _EpisodeCardWithHoverState extends State<_EpisodeCardWithHover> {
           setState(() => _isHovering = false);
         }
       },
-      child: GestureDetector(
-        onTap: widget.onTap,
-        child: Container(
-          decoration: BoxDecoration(
-            color: widget.isCurrentEpisode
-                ? Colors.green.withOpacity(0.2)
-                : (_isHovering && DeviceUtils.isPC()
-                    ? (widget.isDarkMode
-                        ? const Color(0xFF1A3D2E) // 深色模式下的浅绿色
-                        : const Color(0xFFE8F5E9)) // 浅色模式下的浅绿色
-                    : (widget.isDarkMode
-                        ? Colors.grey[700]
-                        : Colors.grey[300])),
-            borderRadius: BorderRadius.circular(8),
-            border: widget.isCurrentEpisode
-                ? Border.all(color: Colors.green, width: 2)
-                : null,
+      child: FocusableActionDetector(
+        onShowFocusHighlight: (value) {
+          if (!mounted) return;
+          setState(() => _isFocused = value);
+        },
+        shortcuts: const {
+          SingleActivator(LogicalKeyboardKey.enter): ActivateIntent(),
+          SingleActivator(LogicalKeyboardKey.select): ActivateIntent(),
+          SingleActivator(LogicalKeyboardKey.space): ActivateIntent(),
+        },
+        actions: {
+          ActivateIntent: CallbackAction<ActivateIntent>(
+            onInvoke: (_) {
+              widget.onTap?.call();
+              return null;
+            },
           ),
-          child: Stack(
-            children: [
-              // 左上角集数
-              Positioned(
-                top: 4,
-                left: 6,
-                child: Text(
-                  '${widget.episodeIndex + 1}',
-                  style: TextStyle(
-                    color: widget.isCurrentEpisode
-                        ? Colors.green
-                        : (widget.isDarkMode ? Colors.white : Colors.black),
-                    fontSize: 10,
-                    fontWeight: FontWeight.w400,
-                  ),
-                ),
-              ),
-              // 中间集数名称
-              Center(
-                child: Padding(
-                  padding: const EdgeInsets.only(top: 6, left: 4, right: 4),
+        },
+        child: GestureDetector(
+          onTap: widget.onTap,
+          child: Container(
+            decoration: BoxDecoration(
+              color: widget.isCurrentEpisode
+                  ? Colors.green.withOpacity(0.2)
+                  : (_isHovering && DeviceUtils.isPC()
+                      ? (widget.isDarkMode
+                          ? const Color(0xFF1A3D2E) // 深色模式下的浅绿色
+                          : const Color(0xFFE8F5E9)) // 浅色模式下的浅绿色
+                      : (widget.isDarkMode
+                          ? Colors.grey[700]
+                          : Colors.grey[300])),
+              borderRadius: BorderRadius.circular(8),
+              border: widget.isCurrentEpisode || _isFocused
+                  ? Border.all(color: const Color(0xFF27AE60), width: 2)
+                  : null,
+            ),
+            child: Stack(
+              children: [
+                // 左上角集数
+                Positioned(
+                  top: 4,
+                  left: 6,
                   child: Text(
-                    widget.episodeTitle,
+                    '${widget.episodeIndex + 1}',
                     style: TextStyle(
                       color: widget.isCurrentEpisode
                           ? Colors.green
                           : (widget.isDarkMode ? Colors.white : Colors.black),
-                      fontSize: 13,
+                      fontSize: 10,
                       fontWeight: FontWeight.w400,
                     ),
-                    textAlign: TextAlign.center,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
-              ),
-            ],
+                // 中间集数名称
+                Center(
+                  child: Padding(
+                    padding: const EdgeInsets.only(top: 6, left: 4, right: 4),
+                    child: Text(
+                      widget.episodeTitle,
+                      style: TextStyle(
+                        color: widget.isCurrentEpisode
+                            ? Colors.green
+                            : (widget.isDarkMode ? Colors.white : Colors.black),
+                        fontSize: 13,
+                        fontWeight: FontWeight.w400,
+                      ),
+                      textAlign: TextAlign.center,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -3148,6 +3186,7 @@ class _SourceCardWithHover extends StatefulWidget {
 
 class _SourceCardWithHoverState extends State<_SourceCardWithHover> {
   bool _isHovering = false;
+  bool _isFocused = false;
 
   @override
   Widget build(BuildContext context) {
@@ -3165,106 +3204,126 @@ class _SourceCardWithHoverState extends State<_SourceCardWithHover> {
           setState(() => _isHovering = false);
         }
       },
-      child: GestureDetector(
-        onTap: widget.onTap,
-        child: Container(
-          decoration: BoxDecoration(
-            color: widget.isCurrentSource
-                ? Colors.green.withOpacity(0.2)
-                : (_isHovering && DeviceUtils.isPC()
-                    ? (widget.isDarkMode
-                        ? const Color(0xFF1A3D2E) // 深色模式下的浅绿色
-                        : const Color(0xFFE8F5E9)) // 浅色模式下的浅绿色
-                    : (widget.isDarkMode
-                        ? Colors.grey[700]
-                        : Colors.grey[300])),
-            borderRadius: BorderRadius.circular(8),
-            border: widget.isCurrentSource
-                ? Border.all(color: Colors.green, width: 2)
-                : null,
+      child: FocusableActionDetector(
+        onShowFocusHighlight: (value) {
+          if (!mounted) return;
+          setState(() => _isFocused = value);
+        },
+        shortcuts: const {
+          SingleActivator(LogicalKeyboardKey.enter): ActivateIntent(),
+          SingleActivator(LogicalKeyboardKey.select): ActivateIntent(),
+          SingleActivator(LogicalKeyboardKey.space): ActivateIntent(),
+        },
+        actions: {
+          ActivateIntent: CallbackAction<ActivateIntent>(
+            onInvoke: (_) {
+              widget.onTap?.call();
+              return null;
+            },
           ),
-          child: Stack(
-            children: [
-              // 右上角集数信息
-              if (widget.source.episodes.length > 1)
-                Positioned(
-                  top: 4,
-                  right: 6,
-                  child: Text(
-                    '${widget.source.episodes.length}集',
-                    style: TextStyle(
-                      color: widget.isCurrentSource
-                          ? Colors.green
-                          : (widget.isDarkMode
-                              ? Colors.grey[400]
-                              : Colors.grey[600]),
-                      fontSize: 10,
-                      fontWeight: FontWeight.w400,
+        },
+        child: GestureDetector(
+          onTap: widget.onTap,
+          child: Container(
+            decoration: BoxDecoration(
+              color: widget.isCurrentSource
+                  ? Colors.green.withOpacity(0.2)
+                  : (_isHovering && DeviceUtils.isPC()
+                      ? (widget.isDarkMode
+                          ? const Color(0xFF1A3D2E) // 深色模式下的浅绿色
+                          : const Color(0xFFE8F5E9)) // 浅色模式下的浅绿色
+                      : (widget.isDarkMode
+                          ? Colors.grey[700]
+                          : Colors.grey[300])),
+              borderRadius: BorderRadius.circular(8),
+              border: widget.isCurrentSource || _isFocused
+                  ? Border.all(color: const Color(0xFF27AE60), width: 2)
+                  : null,
+            ),
+            child: Stack(
+              children: [
+                // 右上角集数信息
+                if (widget.source.episodes.length > 1)
+                  Positioned(
+                    top: 4,
+                    right: 6,
+                    child: Text(
+                      '${widget.source.episodes.length}集',
+                      style: TextStyle(
+                        color: widget.isCurrentSource
+                            ? Colors.green
+                            : (widget.isDarkMode
+                                ? Colors.grey[400]
+                                : Colors.grey[600]),
+                        fontSize: 10,
+                        fontWeight: FontWeight.w400,
+                      ),
+                    ),
+                  ),
+
+                // 中间源名称
+                Center(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    child: Text(
+                      widget.source.sourceName,
+                      style: TextStyle(
+                        color: widget.isCurrentSource
+                            ? Colors.green
+                            : (widget.isDarkMode ? Colors.white : Colors.black),
+                        fontSize: 13,
+                        fontWeight: FontWeight.w400,
+                      ),
+                      textAlign: TextAlign.center,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                 ),
 
-              // 中间源名称
-              Center(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 4),
-                  child: Text(
-                    widget.source.sourceName,
-                    style: TextStyle(
-                      color: widget.isCurrentSource
-                          ? Colors.green
-                          : (widget.isDarkMode ? Colors.white : Colors.black),
-                      fontSize: 13,
-                      fontWeight: FontWeight.w400,
-                    ),
-                    textAlign: TextAlign.center,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ),
 
-              // 左下角分辨率信息
-              if (widget.speedInfo != null &&
-                  widget.speedInfo!.quality.toLowerCase() != '未知')
-                Positioned(
-                  bottom: 4,
-                  left: 6,
-                  child: Text(
-                    widget.speedInfo!.quality,
-                    style: TextStyle(
-                      color: widget.isCurrentSource
-                          ? Colors.green
-                          : (widget.isDarkMode
-                              ? Colors.grey[400]
-                              : Colors.grey[600]),
-                      fontSize: 10,
-                      fontWeight: FontWeight.w400,
+                // 左下角分辨率信息
+                if (widget.speedInfo != null &&
+                    widget.speedInfo!.quality.toLowerCase() != '未知')
+                  Positioned(
+                    bottom: 4,
+                    left: 6,
+                    child: Text(
+                      widget.speedInfo!.quality,
+                      style: TextStyle(
+                        color: widget.isCurrentSource
+                            ? Colors.green
+                            : (widget.isDarkMode
+                                ? Colors.grey[400]
+                                : Colors.grey[600]),
+                        fontSize: 10,
+                        fontWeight: FontWeight.w400,
+                      ),
                     ),
                   ),
-                ),
 
-              // 右下角速率信息
-              if (widget.speedInfo != null &&
-                  widget.speedInfo!.loadSpeed.isNotEmpty &&
-                  !widget.speedInfo!.loadSpeed.toLowerCase().contains('超时'))
-                Positioned(
-                  bottom: 4,
-                  right: 6,
-                  child: Text(
-                    widget.speedInfo!.loadSpeed,
-                    style: TextStyle(
-                      color: widget.isCurrentSource
-                          ? Colors.green
-                          : (widget.isDarkMode
-                              ? Colors.grey[400]
-                              : Colors.grey[600]),
-                      fontSize: 10,
-                      fontWeight: FontWeight.w400,
+                // 右下角速率信息
+                if (widget.speedInfo != null &&
+                    widget.speedInfo!.loadSpeed.isNotEmpty &&
+                    !widget.speedInfo!.loadSpeed.toLowerCase().contains('超时'))
+                  Positioned(
+                    bottom: 4,
+                    right: 6,
+                    child: Text(
+                      widget.speedInfo!.loadSpeed,
+                      style: TextStyle(
+                        color: widget.isCurrentSource
+                            ? Colors.green
+                            : (widget.isDarkMode
+                                ? Colors.grey[400]
+                                : Colors.grey[600]),
+                        fontSize: 10,
+                        fontWeight: FontWeight.w400,
+                      ),
                     ),
                   ),
-                ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -3290,6 +3349,7 @@ class _HoverButton extends StatefulWidget {
 
 class _HoverButtonState extends State<_HoverButton> {
   bool _isHovered = false;
+  bool _isFocused = false;
 
   @override
   Widget build(BuildContext context) {
@@ -3301,21 +3361,52 @@ class _HoverButtonState extends State<_HoverButton> {
           : MouseCursor.defer,
       onEnter: isPC ? (_) => setState(() => _isHovered = true) : null,
       onExit: isPC ? (_) => setState(() => _isHovered = false) : null,
-      child: GestureDetector(
-        onTap: widget.enabled ? widget.onTap : null,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          child: ColorFiltered(
-            colorFilter: (isPC && _isHovered && widget.enabled)
-                ? const ColorFilter.mode(
-                    Colors.green,
-                    BlendMode.modulate,
-                  )
-                : const ColorFilter.mode(
-                    Colors.white,
-                    BlendMode.modulate,
-                  ),
-            child: widget.child,
+      child: FocusableActionDetector(
+        onShowFocusHighlight: (value) {
+          if (!mounted) return;
+          setState(() => _isFocused = value);
+        },
+        shortcuts: const {
+          SingleActivator(LogicalKeyboardKey.enter): ActivateIntent(),
+          SingleActivator(LogicalKeyboardKey.select): ActivateIntent(),
+          SingleActivator(LogicalKeyboardKey.space): ActivateIntent(),
+        },
+        actions: {
+          ActivateIntent: CallbackAction<ActivateIntent>(
+            onInvoke: (_) {
+              if (widget.enabled) {
+                widget.onTap?.call();
+              }
+              return null;
+            },
+          ),
+        },
+        child: GestureDetector(
+          onTap: widget.enabled ? widget.onTap : null,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            padding: _isFocused
+                ? const EdgeInsets.symmetric(horizontal: 2, vertical: 1)
+                : EdgeInsets.zero,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(
+                color: _isFocused ? const Color(0xFF27AE60) : Colors.transparent,
+                width: 1.8,
+              ),
+            ),
+            child: ColorFiltered(
+              colorFilter: (isPC && _isHovered && widget.enabled)
+                  ? const ColorFilter.mode(
+                      Colors.green,
+                      BlendMode.modulate,
+                    )
+                  : const ColorFilter.mode(
+                      Colors.white,
+                      BlendMode.modulate,
+                    ),
+              child: widget.child,
+            ),
           ),
         ),
       ),

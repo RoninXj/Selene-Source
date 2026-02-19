@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../utils/device_utils.dart';
 
 class PlayerEpisodesPanel extends StatefulWidget {
@@ -173,6 +174,7 @@ class _EpisodePanelItemWithHover extends StatefulWidget {
 
 class _EpisodePanelItemWithHoverState extends State<_EpisodePanelItemWithHover> {
   bool _isHovering = false;
+  bool _isFocused = false;
 
   @override
   Widget build(BuildContext context) {
@@ -190,38 +192,57 @@ class _EpisodePanelItemWithHoverState extends State<_EpisodePanelItemWithHover> 
           setState(() => _isHovering = false);
         }
       },
-      child: GestureDetector(
-        onTap: widget.onTap,
-        child: Container(
-          decoration: BoxDecoration(
-            color: widget.isCurrentEpisode
-                ? Colors.green.withValues(alpha: 0.2)
-                : (_isHovering && DeviceUtils.isPC()
-                    ? (widget.isDarkMode 
-                        ? const Color(0xFF1A3D2E)  // 深色模式下的浅绿色
-                        : const Color(0xFFE8F5E9))  // 浅色模式下的浅绿色
-                    : (widget.isDarkMode ? Colors.grey[800] : Colors.grey[200])),
-            borderRadius: BorderRadius.circular(8),
-            border: widget.isCurrentEpisode
-                ? Border.all(color: Colors.green, width: 2)
-                : null,
+      child: FocusableActionDetector(
+        onShowFocusHighlight: (value) {
+          if (!mounted) return;
+          setState(() => _isFocused = value);
+        },
+        shortcuts: const {
+          SingleActivator(LogicalKeyboardKey.enter): ActivateIntent(),
+          SingleActivator(LogicalKeyboardKey.select): ActivateIntent(),
+          SingleActivator(LogicalKeyboardKey.space): ActivateIntent(),
+        },
+        actions: {
+          ActivateIntent: CallbackAction<ActivateIntent>(
+            onInvoke: (_) {
+              widget.onTap?.call();
+              return null;
+            },
           ),
-          child: Center(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-              child: Text(
-                widget.episodeTitle,
-                textAlign: TextAlign.center,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: widget.isCurrentEpisode
-                      ? Colors.green
-                      : (widget.isDarkMode
-                          ? Colors.white
-                          : Colors.black),
-                  fontWeight: FontWeight.w500,
-                  fontSize: 14,
+        },
+        child: GestureDetector(
+          onTap: widget.onTap,
+          child: Container(
+            decoration: BoxDecoration(
+              color: widget.isCurrentEpisode
+                  ? Colors.green.withValues(alpha: 0.2)
+                  : (_isHovering && DeviceUtils.isPC()
+                      ? (widget.isDarkMode
+                          ? const Color(0xFF1A3D2E)  // 深色模式下的浅绿色
+                          : const Color(0xFFE8F5E9))  // 浅色模式下的浅绿色
+                      : (widget.isDarkMode ? Colors.grey[800] : Colors.grey[200])),
+              borderRadius: BorderRadius.circular(8),
+              border: widget.isCurrentEpisode || _isFocused
+                  ? Border.all(color: const Color(0xFF27AE60), width: 2)
+                  : null,
+            ),
+            child: Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                child: Text(
+                  widget.episodeTitle,
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: widget.isCurrentEpisode
+                        ? Colors.green
+                        : (widget.isDarkMode
+                            ? Colors.white
+                            : Colors.black),
+                    fontWeight: FontWeight.w500,
+                    fontSize: 14,
+                  ),
                 ),
               ),
             ),
