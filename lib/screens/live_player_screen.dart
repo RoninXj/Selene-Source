@@ -1859,6 +1859,7 @@ class _HoverButton extends StatefulWidget {
 
 class _HoverButtonState extends State<_HoverButton> {
   bool _isHovered = false;
+  bool _isFocused = false;
 
   @override
   Widget build(BuildContext context) {
@@ -1870,21 +1871,48 @@ class _HoverButtonState extends State<_HoverButton> {
           : MouseCursor.defer,
       onEnter: isPC ? (_) => setState(() => _isHovered = true) : null,
       onExit: isPC ? (_) => setState(() => _isHovered = false) : null,
-      child: GestureDetector(
-        onTap: widget.onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          child: ColorFiltered(
-            colorFilter: (isPC && _isHovered)
-                ? const ColorFilter.mode(
-                    Colors.green,
-                    BlendMode.modulate,
-                  )
-                : const ColorFilter.mode(
-                    Colors.white,
-                    BlendMode.modulate,
-                  ),
-            child: widget.child,
+      child: FocusableActionDetector(
+        onShowFocusHighlight: (value) {
+          if (!mounted) return;
+          setState(() => _isFocused = value);
+        },
+        shortcuts: const {
+          SingleActivator(LogicalKeyboardKey.enter): ActivateIntent(),
+          SingleActivator(LogicalKeyboardKey.select): ActivateIntent(),
+          SingleActivator(LogicalKeyboardKey.space): ActivateIntent(),
+        },
+        actions: {
+          ActivateIntent: CallbackAction<ActivateIntent>(
+            onInvoke: (_) {
+              widget.onTap?.call();
+              return null;
+            },
+          ),
+        },
+        child: GestureDetector(
+          onTap: widget.onTap,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            padding: _isFocused ? const EdgeInsets.symmetric(horizontal: 2, vertical: 1) : EdgeInsets.zero,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(
+                color: _isFocused ? const Color(0xFF27AE60) : Colors.transparent,
+                width: 1.8,
+              ),
+            ),
+            child: ColorFiltered(
+              colorFilter: (isPC && _isHovered)
+                  ? const ColorFilter.mode(
+                      Colors.green,
+                      BlendMode.modulate,
+                    )
+                  : const ColorFilter.mode(
+                      Colors.white,
+                      BlendMode.modulate,
+                    ),
+              child: widget.child,
+            ),
           ),
         ),
       ),

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../utils/font_utils.dart';
 
 class SelectorOption {
@@ -31,6 +32,7 @@ class FilterPillHover extends StatefulWidget {
 
 class _FilterPillHoverState extends State<FilterPillHover> {
   bool _isHovered = false;
+  bool _isFocused = false;
 
   @override
   Widget build(BuildContext context) {
@@ -48,32 +50,56 @@ class _FilterPillHoverState extends State<FilterPillHover> {
       onEnter: (_) => setState(() => _isHovered = true),
       onExit: (_) => setState(() => _isHovered = false),
       cursor: SystemMouseCursors.click,
-      child: GestureDetector(
-        onTap: widget.onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-          decoration: BoxDecoration(
-            color: Colors.transparent,
-            borderRadius: BorderRadius.circular(20),
+      child: FocusableActionDetector(
+        onShowFocusHighlight: (value) {
+          if (!mounted) return;
+          setState(() => _isFocused = value);
+        },
+        shortcuts: const {
+          SingleActivator(LogicalKeyboardKey.enter): ActivateIntent(),
+          SingleActivator(LogicalKeyboardKey.select): ActivateIntent(),
+          SingleActivator(LogicalKeyboardKey.space): ActivateIntent(),
+        },
+        actions: {
+          ActivateIntent: CallbackAction<ActivateIntent>(
+            onInvoke: (_) {
+              widget.onTap();
+              return null;
+            },
           ),
-          child: Row(
-            children: [
-              Text(
-                widget.isDefault ? widget.title : widget.selectedOption.label,
-                style: FontUtils.poppins(
-                  fontSize: 13,
-                  color: textColor,
-                  fontWeight:
-                      widget.isDefault ? FontWeight.normal : FontWeight.w500,
+        },
+        child: GestureDetector(
+          onTap: widget.onTap,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 120),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+            decoration: BoxDecoration(
+              color: Colors.transparent,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: _isFocused ? const Color(0xFF27AE60) : Colors.transparent,
+                width: 1.8,
+              ),
+            ),
+            child: Row(
+              children: [
+                Text(
+                  widget.isDefault ? widget.title : widget.selectedOption.label,
+                  style: FontUtils.poppins(
+                    fontSize: 13,
+                    color: textColor,
+                    fontWeight:
+                        widget.isDefault ? FontWeight.normal : FontWeight.w500,
+                  ),
                 ),
-              ),
-              const SizedBox(width: 4),
-              Icon(
-                Icons.arrow_drop_down,
-                size: 18,
-                color: textColor,
-              ),
-            ],
+                const SizedBox(width: 4),
+                Icon(
+                  Icons.arrow_drop_down,
+                  size: 18,
+                  color: textColor,
+                ),
+              ],
+            ),
           ),
         ),
       ),

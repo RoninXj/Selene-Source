@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'dart:io' show Platform;
@@ -28,6 +29,7 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _isLoading = false;
   bool _isFormValid = false;
   bool _isLocalMode = false;
+  bool _isAndroidTv = false;
 
   // 点击计数器相关
   int _logoTapCount = 0;
@@ -40,7 +42,16 @@ class _LoginScreenState extends State<LoginScreen> {
     _usernameController.addListener(_validateForm);
     _passwordController.addListener(_validateForm);
     _subscriptionUrlController.addListener(_validateForm);
+    _resolveDeviceType();
     _loadSavedUserData();
+  }
+
+  void _resolveDeviceType() async {
+    final isTv = await DeviceUtils.isAndroidTV();
+    if (!mounted) return;
+    setState(() {
+      _isAndroidTv = isTv;
+    });
   }
 
   void _loadSavedUserData() async {
@@ -132,6 +143,50 @@ class _LoginScreenState extends State<LoginScreen> {
     } else {
       _handleLogin();
     }
+  }
+
+  void _switchLoginMode(bool localMode) {
+    if (_isLocalMode == localMode) return;
+    setState(() {
+      _isLocalMode = localMode;
+    });
+    _validateForm();
+  }
+
+  Widget _buildTvModeSwitch() {
+    if (!_isAndroidTv) return const SizedBox.shrink();
+
+    return Column(
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: _TvModeButton(
+                label: '服务器模式',
+                active: !_isLocalMode,
+                onPressed: () => _switchLoginMode(false),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _TvModeButton(
+                label: '本地模式',
+                active: _isLocalMode,
+                onPressed: () => _switchLoginMode(true),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'TV 端可直接切换登录模式',
+          style: FontUtils.poppins(
+            fontSize: 12,
+            color: const Color(0xFF7f8c8d),
+          ),
+        ),
+      ],
+    );
   }
 
   Widget _buildLocalModeForm() {
@@ -567,6 +622,8 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
         ),
         const SizedBox(height: 40),
+        _buildTvModeSwitch(),
+        if (_isAndroidTv) const SizedBox(height: 24),
 
         // 登录表单 - 无边框设计
         Form(
@@ -834,6 +891,8 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
           ),
           const SizedBox(height: 40),
+          _buildTvModeSwitch(),
+          if (_isAndroidTv) const SizedBox(height: 24),
 
           // 登录表单 - 无边框设计
           Form(
@@ -1076,6 +1135,74 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _TvModeButton extends StatefulWidget {
+  final String label;
+  final bool active;
+  final VoidCallback onPressed;
+
+  const _TvModeButton({
+    required this.label,
+    required this.active,
+    required this.onPressed,
+  });
+
+  @override
+  State<_TvModeButton> createState() => _TvModeButtonState();
+}
+
+class _TvModeButtonState extends State<_TvModeButton> {
+  bool _focused = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return FocusableActionDetector(
+      onShowFocusHighlight: (value) {
+        if (!mounted) return;
+        setState(() => _focused = value);
+      },
+      shortcuts: const {
+        SingleActivator(LogicalKeyboardKey.enter): ActivateIntent(),
+        SingleActivator(LogicalKeyboardKey.select): ActivateIntent(),
+        SingleActivator(LogicalKeyboardKey.space): ActivateIntent(),
+      },
+      actions: {
+        ActivateIntent: CallbackAction<ActivateIntent>(
+          onInvoke: (_) {
+            widget.onPressed();
+            return null;
+          },
+        ),
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 120),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        decoration: BoxDecoration(
+          color: widget.active ? const Color(0xFF2c3e50) : Colors.white.withValues(alpha: 0.7),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: _focused ? const Color(0xFF27AE60) : Colors.transparent,
+            width: 2,
+          ),
+        ),
+        child: InkWell(
+          onTap: widget.onPressed,
+          borderRadius: BorderRadius.circular(12),
+          child: Center(
+            child: Text(
+              widget.label,
+              style: FontUtils.poppins(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: widget.active ? Colors.white : const Color(0xFF2c3e50),
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }
