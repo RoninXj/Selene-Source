@@ -25,6 +25,16 @@ jobs:
           distribution: temurin
           java-version: "17"
 
+      - name: Cache Gradle dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties', '**/settings.gradle*', '**/pubspec.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
@@ -40,14 +50,19 @@ jobs:
           channel: stable
           cache: true
 
+      - name: Cache Dart/Flutter pub dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.pub-cache
+          key: ${{ runner.os }}-pub-${{ hashFiles('**/pubspec.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-pub-
+
       - name: Flutter version
         run: flutter --version
 
       - name: Install dependencies
         run: flutter pub get
-
-      - name: Build debug APK (universal for TV test)
-        run: flutter build apk --debug --target-platform android-arm,android-arm64
 
       - name: Build release APK (universal)
         run: flutter build apk --release --target-platform android-arm,android-arm64
@@ -57,7 +72,6 @@ jobs:
 
       - name: Prepare SeleneTv APK files
         run: |
-          cp build/app/outputs/flutter-apk/app-debug.apk build/app/outputs/flutter-apk/SeleneTv-debug-universal.apk
           cp build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/SeleneTv-release-universal.apk
           cp build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk build/app/outputs/flutter-apk/SeleneTv-release-armeabi-v7a.apk
           cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk build/app/outputs/flutter-apk/SeleneTv-release-arm64-v8a.apk
@@ -80,7 +94,6 @@ jobs:
         with:
           name: SeleneTv-apks
           path: |
-            build/app/outputs/flutter-apk/SeleneTv-debug-universal.apk
             build/app/outputs/flutter-apk/SeleneTv-release-universal.apk
             build/app/outputs/flutter-apk/SeleneTv-release-armeabi-v7a.apk
             build/app/outputs/flutter-apk/SeleneTv-release-arm64-v8a.apk
@@ -96,7 +109,6 @@ jobs:
           generate_release_notes: true
           make_latest: false
           files: |
-            build/app/outputs/flutter-apk/SeleneTv-debug-universal.apk
             build/app/outputs/flutter-apk/SeleneTv-release-universal.apk
             build/app/outputs/flutter-apk/SeleneTv-release-armeabi-v7a.apk
             build/app/outputs/flutter-apk/SeleneTv-release-arm64-v8a.apk
