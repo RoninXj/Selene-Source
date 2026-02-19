@@ -25,22 +25,6 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - name: Cache Gradle dependencies
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties', '**/settings.gradle*', '**/pubspec.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-gradle-
-
-      - name: Cache CI release signing keystore
-        uses: actions/cache@v4
-        with:
-          path: ~/.android/selenetv-release.keystore
-          key: ${{ runner.os }}-selenetv-release-signing-key-v2
-
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
@@ -70,93 +54,20 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Build release APK (universal)
-        run: flutter build apk --release --target-platform android-arm,android-arm64
+      - name: Build release APK (Orion-style direct build)
+        run: flutter build apk --release --target-platform android-arm
 
-      - name: Build release APK (split per ABI)
-        run: flutter build apk --release --split-per-abi --target-platform android-arm,android-arm64
-
-      - name: Prepare SeleneTv APK files
+      - name: Prepare SeleneTv APK file
         run: |
-          cp build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/SeleneTv-release-universal.apk
-          cp build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk build/app/outputs/flutter-apk/SeleneTv-release-armeabi-v7a.apk
-          cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk build/app/outputs/flutter-apk/SeleneTv-release-arm64-v8a.apk
+          cp build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/SeleneTv-release.apk
 
-      - name: Re-sign APKs for Android 6 TV compatibility (release key, v1 + v2)
-        run: |
-          APKSIGNER="$ANDROID_HOME/build-tools/34.0.0/apksigner"
-          ZIPALIGN="$ANDROID_HOME/build-tools/34.0.0/zipalign"
-          RELEASE_KEYSTORE="$HOME/.android/selenetv-release.keystore"
-          RELEASE_ALIAS="selenetv"
-          RELEASE_PASS="selenetv123"
-
-          if [ ! -f "$RELEASE_KEYSTORE" ]; then
-            echo "Release keystore not found, generating one..."
-            mkdir -p "$HOME/.android"
-            keytool -genkeypair \
-              -v \
-              -keystore "$RELEASE_KEYSTORE" \
-              -storepass "$RELEASE_PASS" \
-              -keypass "$RELEASE_PASS" \
-              -keyalg RSA \
-              -keysize 2048 \
-              -validity 10000 \
-              -alias "$RELEASE_ALIAS" \
-              -dname "CN=SeleneTv,O=SeleneTv,C=US"
-          fi
-
-          for apk in build/app/outputs/flutter-apk/SeleneTv-release-*.apk; do
-            echo "Re-signing $apk with release key (v1+v2, no v3/v4)..."
-            aligned="${apk%.apk}-aligned.apk"
-            signed="${apk%.apk}-signed.apk"
-            "$ZIPALIGN" -f -p 4 "$apk" "$aligned"
-            "$APKSIGNER" sign \
-              --ks "$RELEASE_KEYSTORE" \
-              --ks-key-alias "$RELEASE_ALIAS" \
-              --ks-pass pass:"$RELEASE_PASS" \
-              --key-pass pass:"$RELEASE_PASS" \
-              --v1-signing-enabled true \
-              --v2-signing-enabled true \
-              --v3-signing-enabled false \
-              --v4-signing-enabled false \
-              --out "$signed" \
-              "$aligned"
-            mv "$signed" "$apk"
-            rm -f "$aligned"
-          done
-
-      - name: Verify APK signatures and integrity
-        run: |
-          APKSIGNER="$ANDROID_HOME/build-tools/34.0.0/apksigner"
-          for apk in build/app/outputs/flutter-apk/SeleneTv-*.apk; do
-            echo "Verifying $apk"
-            # Must pass legacy-compatible verification baseline.
-            # App minSdk is 21, so verification must not use a lower API level.
-            "$APKSIGNER" verify --verbose --min-sdk-version 21 "$apk"
-            # Print cert details for traceability in CI logs
-            "$APKSIGNER" verify --verbose --print-certs "$apk"
-            # Newer Android verification is best-effort and should not block TV artifacts.
-            if ! "$APKSIGNER" verify --verbose --min-sdk-version 24 "$apk"; then
-              echo "::warning::min-sdk 24 verification failed for $apk, continuing (target device is Android 6 TV)."
-            fi
-            unzip -t "$apk" > /dev/null
-          done
-
-      - name: Generate SHA256 checksums
-        run: |
-          sha256sum build/app/outputs/flutter-apk/SeleneTv-*.apk | tee build/app/outputs/flutter-apk/SeleneTv-SHA256.txt
-
-      - name: Upload SeleneTv APKs and checksums
+      - name: Upload SeleneTv APK
         uses: actions/upload-artifact@v4
         with:
-          name: SeleneTv-apks
-          path: |
-            build/app/outputs/flutter-apk/SeleneTv-release-universal.apk
-            build/app/outputs/flutter-apk/SeleneTv-release-armeabi-v7a.apk
-            build/app/outputs/flutter-apk/SeleneTv-release-arm64-v8a.apk
-            build/app/outputs/flutter-apk/SeleneTv-SHA256.txt
+          name: SeleneTv-apk
+          path: build/app/outputs/flutter-apk/SeleneTv-release.apk
 
-      - name: Publish GitHub Release with APKs
+      - name: Publish GitHub Release with APK
         uses: softprops/action-gh-release@v2
         with:
           tag_name: selenetv-build-${{ github.run_id }}-${{ github.run_attempt }}
@@ -165,8 +76,4 @@ jobs:
           prerelease: true
           generate_release_notes: true
           make_latest: false
-          files: |
-            build/app/outputs/flutter-apk/SeleneTv-release-universal.apk
-            build/app/outputs/flutter-apk/SeleneTv-release-armeabi-v7a.apk
-            build/app/outputs/flutter-apk/SeleneTv-release-arm64-v8a.apk
-            build/app/outputs/flutter-apk/SeleneTv-SHA256.txt
+          files: build/app/outputs/flutter-apk/SeleneTv-release.apk
