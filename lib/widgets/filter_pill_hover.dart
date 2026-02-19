@@ -114,6 +114,7 @@ class FilterOptionHover extends StatefulWidget {
   final String label;
   final VoidCallback onTap;
   final bool useCompactLayout;
+  final bool autofocus;
 
   const FilterOptionHover({
     super.key,
@@ -122,6 +123,7 @@ class FilterOptionHover extends StatefulWidget {
     required this.label,
     required this.onTap,
     this.useCompactLayout = false,
+    this.autofocus = false,
   });
 
   @override
@@ -152,6 +154,7 @@ class _FilterOptionHoverState extends State<FilterOptionHover> {
       onExit: (_) => setState(() => _isHovered = false),
       cursor: SystemMouseCursors.click,
       child: FocusableActionDetector(
+        autofocus: widget.autofocus,
         onShowFocusHighlight: (value) {
           if (!mounted) return;
           setState(() => _isFocused = value);

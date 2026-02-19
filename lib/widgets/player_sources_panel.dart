@@ -231,6 +231,19 @@ class _SourcePanelItemWithHoverState extends State<_SourcePanelItemWithHover> {
   bool _isHovering = false;
   bool _isFocused = false;
 
+  void _ensureVisibleInScrollable() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (Scrollable.maybeOf(context) == null) return;
+      Scrollable.ensureVisible(
+        context,
+        duration: const Duration(milliseconds: 140),
+        curve: Curves.easeOutCubic,
+        alignment: 0.4,
+      );
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return MouseRegion(
@@ -248,6 +261,11 @@ class _SourcePanelItemWithHoverState extends State<_SourcePanelItemWithHover> {
         }
       },
       child: FocusableActionDetector(
+        onFocusChange: (focused) {
+          if (focused) {
+            _ensureVisibleInScrollable();
+          }
+        },
         onShowFocusHighlight: (value) {
           if (!mounted) return;
           setState(() => _isFocused = value);

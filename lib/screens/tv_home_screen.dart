@@ -37,6 +37,7 @@ class _TvHomeScreenState extends State<TvHomeScreen> {
   bool _showSearch = false;
   bool _searching = false;
   String? _error;
+  DateTime? _lastBackPressedAt;
 
   List<PlayRecord> _records = [];
   List<FavoriteItem> _favorites = [];
@@ -563,52 +564,82 @@ class _TvHomeScreenState extends State<TvHomeScreen> {
     }).toList();
   }
 
+  Future<bool> _onWillPop() async {
+    if (_showSearch) {
+      _clearSearch();
+      return false;
+    }
+
+    if (_topTab != 0) {
+      setState(() => _topTab = 0);
+      return false;
+    }
+
+    if (_bottomTab != 0) {
+      _onBottomTabSelected(0);
+      return false;
+    }
+
+    final now = DateTime.now();
+    if (_lastBackPressedAt == null ||
+        now.difference(_lastBackPressedAt!) > const Duration(seconds: 2)) {
+      _lastBackPressedAt = now;
+      _showOperationFeedback('再按一次返回键退出应用');
+      return false;
+    }
+
+    return true;
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = context.watch<ThemeService>();
 
-    return Scaffold(
-      body: Container(
-        decoration: BoxDecoration(
-          color: theme.isDarkMode ? const Color(0xFF000000) : null,
-          gradient: theme.isDarkMode
-              ? null
-              : const LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Color(0xFFe6f3fb),
-                    Color(0xFFeaf3f7),
-                    Color(0xFFf7f7f3),
-                    Color(0xFFe9ecef),
-                    Color(0xFFdbe3ea),
-                    Color(0xFFd3dde6),
-                  ],
-                  stops: [0.0, 0.18, 0.38, 0.60, 0.80, 1.0],
+    return WillPopScope(
+      onWillPop: _onWillPop,
+      child: Scaffold(
+        body: Container(
+          decoration: BoxDecoration(
+            color: theme.isDarkMode ? const Color(0xFF000000) : null,
+            gradient: theme.isDarkMode
+                ? null
+                : const LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Color(0xFFe6f3fb),
+                      Color(0xFFeaf3f7),
+                      Color(0xFFf7f7f3),
+                      Color(0xFFe9ecef),
+                      Color(0xFFdbe3ea),
+                      Color(0xFFd3dde6),
+                    ],
+                    stops: [0.0, 0.18, 0.38, 0.60, 0.80, 1.0],
+                  ),
+          ),
+          child: SafeArea(
+            child: Column(
+              children: [
+                _buildHeader(theme),
+                if (_showSearch) _buildSearchBar(theme),
+                _buildTopTabs(theme),
+                if (_searching)
+                  const LinearProgressIndicator(
+                    minHeight: 3,
+                    color: Color(0xFF27AE60),
+                  ),
+                Expanded(
+                  child: _loading
+                      ? const Center(
+                          child: CircularProgressIndicator(
+                            color: Color(0xFF27AE60),
+                          ),
+                        )
+                      : _buildContent(theme),
                 ),
-        ),
-        child: SafeArea(
-          child: Column(
-            children: [
-              _buildHeader(theme),
-              if (_showSearch) _buildSearchBar(theme),
-              _buildTopTabs(theme),
-              if (_searching)
-                const LinearProgressIndicator(
-                  minHeight: 3,
-                  color: Color(0xFF27AE60),
-                ),
-              Expanded(
-                child: _loading
-                    ? const Center(
-                        child: CircularProgressIndicator(
-                          color: Color(0xFF27AE60),
-                        ),
-                      )
-                    : _buildContent(theme),
-              ),
-              _buildBottomNav(theme),
-            ],
+                _buildBottomNav(theme),
+              ],
+            ),
           ),
         ),
       ),

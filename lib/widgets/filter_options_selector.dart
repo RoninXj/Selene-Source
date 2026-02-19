@@ -82,6 +82,7 @@ void showFilterOptionsSelector({
                             isSelected: isSelected,
                             label: option.label,
                             useCompactLayout: useCompactLayout,
+                            autofocus: DeviceUtils.isAndroidTVSync() && index == 0,
                             onTap: () {
                               onSelected(option.value);
                               Navigator.pop(context);
@@ -140,6 +141,7 @@ void showFilterOptionsSelector({
                       isPC: DeviceUtils.isPC(),
                       isSelected: isSelected,
                       label: option.label,
+                      autofocus: DeviceUtils.isAndroidTVSync() && index == 0,
                       onTap: () {
                         onSelected(option.value);
                         Navigator.pop(context);

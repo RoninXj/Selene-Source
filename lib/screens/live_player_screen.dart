@@ -1,6 +1,7 @@
 import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../widgets/video_player_surface.dart';
 import '../widgets/video_player_widget.dart';
 import '../models/live_channel.dart';
@@ -790,10 +791,12 @@ class _LivePlayerScreenState extends State<LivePlayerScreen>
                   ),
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(4),
-                    child: Image.network(
-                      _currentChannel.logo,
+                    child: CachedNetworkImage(
+                      imageUrl: _currentChannel.logo,
                       fit: BoxFit.contain,
-                      errorBuilder: (context, error, stackTrace) {
+                      memCacheWidth: 320,
+                      fadeInDuration: const Duration(milliseconds: 120),
+                      errorWidget: (context, url, error) {
                         return _buildDefaultLogoIcon();
                       },
                     ),
@@ -910,78 +913,12 @@ class _LivePlayerScreenState extends State<LivePlayerScreen>
 
         return SizedBox(
           height: 68.0, // 固定高度，从 72 减小到 68
-          child: ListTile(
+          child: _TvChannelTile(
             key: itemKey,
-            selected: isSelected,
-            selectedTileColor: const Color(0xFF27ae60).withOpacity(0.1),
-            visualDensity: const VisualDensity(vertical: -1),
-            leading: channel.logo.isNotEmpty
-              ? AspectRatio(
-                  aspectRatio: 2.0,
-                  child: Container(
-                    padding: const EdgeInsets.all(2),
-                    decoration: BoxDecoration(
-                      color: themeService.isDarkMode
-                          ? const Color(0xFF2a2a2a)
-                          : const Color(0xFFc0c0c0),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(4),
-                      child: Image.network(
-                        channel.logo,
-                        fit: BoxFit.contain,
-                        errorBuilder: (context, error, stackTrace) {
-                          return const Icon(
-                            Icons.tv,
-                            size: 16,
-                            color: Color(0xFF95a5b0),
-                          );
-                        },
-                      ),
-                    ),
-                  ),
-                )
-              : AspectRatio(
-                  aspectRatio: 2.0,
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: themeService.isDarkMode
-                          ? const Color(0xFF2a2a2a)
-                          : const Color(0xFFc0c0c0),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: const Icon(
-                      Icons.tv,
-                      size: 16,
-                      color: Color(0xFF95a5b0),
-                    ),
-                  ),
-                ),
-          title: Text(
-            channel.name,
-            style: FontUtils.poppins(
-              fontSize: 14,
-              fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
-              color: isSelected
-                  ? const Color(0xFF27ae60)
-                  : themeService.isDarkMode
-                      ? Colors.white
-                      : const Color(0xFF2c3e50),
-            ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-          subtitle: Text(
-            channel.group,
-            style: FontUtils.poppins(
-              fontSize: 12,
-              color: themeService.isDarkMode
-                  ? const Color(0xFF999999)
-                  : const Color(0xFF7f8c8d),
-            ),
-          ),
-          onTap: () => _switchChannel(channel),
+            channel: channel,
+            isSelected: isSelected,
+            isDarkMode: themeService.isDarkMode,
+            onTap: () => _switchChannel(channel),
           ),
         );
       },
@@ -1846,6 +1783,150 @@ class _LivePlayerScreenState extends State<LivePlayerScreen>
 }
 
 /// 带 hover 效果的按钮组件（PC 端专用）
+class _TvChannelTile extends StatefulWidget {
+  final LiveChannel channel;
+  final bool isSelected;
+  final bool isDarkMode;
+  final VoidCallback onTap;
+
+  const _TvChannelTile({
+    super.key,
+    required this.channel,
+    required this.isSelected,
+    required this.isDarkMode,
+    required this.onTap,
+  });
+
+  @override
+  State<_TvChannelTile> createState() => _TvChannelTileState();
+}
+
+class _TvChannelTileState extends State<_TvChannelTile> {
+  bool _isFocused = false;
+
+  void _ensureVisibleInScrollable() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (Scrollable.maybeOf(context) == null) return;
+      Scrollable.ensureVisible(
+        context,
+        duration: const Duration(milliseconds: 140),
+        curve: Curves.easeOutCubic,
+        alignment: 0.3,
+      );
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final focusedFill =
+        widget.isDarkMode ? const Color(0xFF1f3128) : const Color(0xFFEAF7EF);
+
+    return FocusableActionDetector(
+      onFocusChange: (focused) {
+        if (focused) {
+          _ensureVisibleInScrollable();
+        }
+      },
+      onShowFocusHighlight: (value) {
+        if (!mounted) return;
+        setState(() => _isFocused = value);
+      },
+      shortcuts: const {
+        SingleActivator(LogicalKeyboardKey.enter): ActivateIntent(),
+        SingleActivator(LogicalKeyboardKey.select): ActivateIntent(),
+        SingleActivator(LogicalKeyboardKey.space): ActivateIntent(),
+      },
+      actions: {
+        ActivateIntent: CallbackAction<ActivateIntent>(
+          onInvoke: (_) {
+            widget.onTap();
+            return null;
+          },
+        ),
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 120),
+        margin: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        decoration: BoxDecoration(
+          color: widget.isSelected
+              ? const Color(0xFF27AE60).withValues(alpha: 0.12)
+              : (_isFocused ? focusedFill : Colors.transparent),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: (widget.isSelected || _isFocused)
+                ? const Color(0xFF27AE60)
+                : Colors.transparent,
+            width: 1.8,
+          ),
+        ),
+        child: ListTile(
+          visualDensity: const VisualDensity(vertical: -2),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 10),
+          leading: AspectRatio(
+            aspectRatio: 2.0,
+            child: Container(
+              padding: const EdgeInsets.all(2),
+              decoration: BoxDecoration(
+                color: widget.isDarkMode
+                    ? const Color(0xFF2a2a2a)
+                    : const Color(0xFFc0c0c0),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(4),
+                child: widget.channel.logo.isNotEmpty
+                    ? CachedNetworkImage(
+                        imageUrl: widget.channel.logo,
+                        fit: BoxFit.contain,
+                        memCacheWidth: 240,
+                        fadeInDuration: const Duration(milliseconds: 120),
+                        errorWidget: (context, url, error) => const Icon(
+                          Icons.tv,
+                          size: 16,
+                          color: Color(0xFF95a5b0),
+                        ),
+                      )
+                    : const Icon(
+                        Icons.tv,
+                        size: 16,
+                        color: Color(0xFF95a5b0),
+                      ),
+              ),
+            ),
+          ),
+          title: Text(
+            widget.channel.name,
+            style: FontUtils.poppins(
+              fontSize: 14,
+              fontWeight: widget.isSelected ? FontWeight.w600 : FontWeight.w400,
+              color: widget.isSelected
+                  ? const Color(0xFF27ae60)
+                  : (widget.isDarkMode
+                      ? Colors.white
+                      : const Color(0xFF2c3e50)),
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          subtitle: Text(
+            widget.channel.group,
+            style: FontUtils.poppins(
+              fontSize: 12,
+              color: widget.isDarkMode
+                  ? const Color(0xFF999999)
+                  : const Color(0xFF7f8c8d),
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          onTap: widget.onTap,
+        ),
+      ),
+    );
+  }
+}
+
 class _HoverButton extends StatefulWidget {
   final Widget child;
   final VoidCallback? onTap;
