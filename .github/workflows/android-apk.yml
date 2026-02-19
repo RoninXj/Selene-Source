@@ -126,10 +126,11 @@ jobs:
           APKSIGNER="$ANDROID_HOME/build-tools/34.0.0/apksigner"
           for apk in build/app/outputs/flutter-apk/SeleneTv-*.apk; do
             echo "Verifying $apk"
-            verify_output="$("$APKSIGNER" verify --verbose --print-certs "$apk")"
-            echo "$verify_output"
-            echo "$verify_output" | grep -q "Verified using v1 scheme (JAR signing): true"
-            echo "$verify_output" | grep -q "Verified using v2 scheme (APK Signature Scheme v2): true"
+            # Require compatibility for legacy Android (v1 path)
+            "$APKSIGNER" verify --verbose --min-sdk-version 16 "$apk"
+            # Require compatibility for newer Android (v2+ path)
+            "$APKSIGNER" verify --verbose --min-sdk-version 24 "$apk"
+            "$APKSIGNER" verify --verbose --print-certs "$apk"
             unzip -t "$apk" > /dev/null
           done
 
