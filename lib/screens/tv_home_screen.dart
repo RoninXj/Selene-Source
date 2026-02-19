@@ -559,7 +559,12 @@ class _TvHomeScreenState extends State<TvHomeScreen> {
   Widget _buildContent(ThemeService theme) {
     if (_topTab == 1) return _buildRecordGrid(theme);
     if (_topTab == 2) return _buildFavoriteGrid(theme);
-    if (_bottomTab == 5) return _buildLiveContent(theme);
+    final hasSearchKeyword = _searchController.text.trim().isNotEmpty;
+    final showSearchState =
+        _searching || _searchResults.isNotEmpty || (_error != null && hasSearchKeyword);
+    if (_bottomTab == 5 && !showSearchState) {
+      return _buildLiveContent(theme);
+    }
 
     final sections = <Widget>[];
     if (_error != null && _searchResults.isEmpty) {
